@@ -308,10 +308,11 @@ function buildDescendants(rootId: string, childrenMap: Map<string, string[]>): S
   return result;
 }
 
-function ListView({ roles, onEdit, onAddUnder }: {
+function ListView({ roles, onEdit, onAddUnder, onShowNetwork }: {
   roles: PersonRole[];
   onEdit: (c: Contact) => void;
   onAddUnder: (parent: Contact) => void;
+  onShowNetwork: (c: Contact) => void;
 }) {
   const [contacts, setContacts]     = useState<Contact[]>([]);
   const [total, setTotal]           = useState(0);
@@ -479,7 +480,11 @@ function ListView({ roles, onEdit, onAddUnder }: {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-gray-900 text-sm">{c.name}</p>
+                      <p
+                        className="font-medium text-gray-900 text-sm cursor-pointer hover:text-brand-600 hover:underline"
+                        title="Duplo clique para ver a rede"
+                        onDoubleClick={() => onShowNetwork(c)}
+                      >{c.name}</p>
                       {c.parent && <span className="text-xs text-gray-400 flex items-center gap-0.5"><ChevronRight size={10} />{c.parent.name}</span>}
                       {c.cidade && <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{c.cidade}</span>}
                       {c.zona   && <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{c.zona}</span>}
@@ -600,8 +605,9 @@ const OrgNode = memo(function OrgNode({ id, childrenMap, contactMap, sizes, defa
   );
 });
 
-function OrgView({ onEditById, onAddUnder }: {
+function OrgView({ onEditById, onAddUnder, focusedId }: {
   onEditById: (id: string) => void; onAddUnder: (c: TreeContact) => void;
+  focusedId?: string | null;
 }) {
   const [contacts, setContacts] = useState<TreeContact[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -621,8 +627,9 @@ function OrgView({ onEditById, onAddUnder }: {
   useEffect(() => {
     const el = containerRef.current; if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return; // só zoom com Ctrl/Cmd segurado
-      e.preventDefault();
+      // Sempre previne o default dentro do canvas para não acionar zoom do browser
+      if (e.ctrlKey || e.metaKey) e.preventDefault();
+      if (!e.ctrlKey && !e.metaKey) return;
       const rect = el.getBoundingClientRect();
       const mx = e.clientX - rect.left, my = e.clientY - rect.top;
       const delta = (e.deltaMode === 1 ? 0.05 : 0.001) * e.deltaY;
@@ -648,7 +655,10 @@ function OrgView({ onEditById, onAddUnder }: {
 
   const { childrenMap, sizes } = buildNetworkSizes(contacts);
   const contactMap = new Map(contacts.map(c => [c.id, c]));
-  const roots = contacts.filter(c => !c.parentId);
+  // Se focusedId definido, mostra só aquela pessoa como raiz da rede
+  const roots = focusedId
+    ? contacts.filter(c => c.id === focusedId)
+    : contacts.filter(c => !c.parentId);
 
   if (loading) return (
     <div className="flex items-center justify-center h-full text-gray-400">
@@ -658,11 +668,11 @@ function OrgView({ onEditById, onAddUnder }: {
 
   return (
     <div ref={containerRef} className="relative h-full overflow-hidden select-none"
-      style={{ cursor: isDragging ? "grabbing" : "grab", background: "#f8fafc" }}
+      style={{ cursor: isDragging ? "grabbing" : "grab", background: "#1e293b" }}
       onMouseDown={onMouseDown} onMouseMove={onMouseMove}
       onMouseUp={() => setIsDragging(false)} onMouseLeave={() => setIsDragging(false)}>
       <div className="absolute inset-0 pointer-events-none" style={{
-        backgroundImage: "radial-gradient(circle, #cbd5e1 1px, transparent 1px)",
+        backgroundImage: "radial-gradient(circle, #475569 1px, transparent 1px)",
         backgroundSize: `${28 * vp.zoom}px ${28 * vp.zoom}px`,
         backgroundPosition: `${vp.x % (28 * vp.zoom)}px ${vp.y % (28 * vp.zoom)}px`, opacity: 0.5,
       }} />
@@ -692,7 +702,7 @@ function OrgView({ onEditById, onAddUnder }: {
         <button onClick={() => setVp({ zoom: 0.9, x: 0, y: 0 })} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600"><Maximize2 size={13} /></button>
         <button onClick={load} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600"><RefreshCw size={13} /></button>
       </div>
-      <div className="absolute bottom-4 left-4 text-xs text-gray-400 bg-white/90 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border border-gray-100 pointer-events-none">
+      <div className="absolute bottom-4 left-4 text-xs text-slate-300 bg-slate-700/80 backdrop-blur-sm rounded-lg px-2.5 py-1.5 pointer-events-none">
         Ctrl + Scroll = zoom · Arrastar = mover · {contacts.length.toLocaleString("pt-BR")} pessoas
       </div>
     </div>
@@ -707,6 +717,7 @@ export default function PessoasPage() {
   const [modal, setModal]         = useState(false);
   const [preset, setPreset]       = useState<FormPreset>({});
   const [totalCount, setTotalCount] = useState(0);
+  const [focusedId, setFocusedId] = useState<string | null>(null);
 
   const loadRoles = useCallback(async () => {
     const r = await fetch("/api/roles"); setRoles(await r.json());
@@ -720,6 +731,11 @@ export default function PessoasPage() {
   useEffect(() => { loadRoles(); loadCount(); }, [loadRoles, loadCount]);
 
   function openNew() { setPreset({}); setModal(true); }
+
+  function showNetwork(c: Contact) {
+    setFocusedId(c.id);
+    setView("org");
+  }
 
   // Abre form com pai pré-selecionado e cargo automático (nível abaixo do pai)
   function openAddUnder(parent: Contact | TreeContact) {
@@ -768,11 +784,11 @@ export default function PessoasPage() {
       </header>
 
       <div className="flex-1 overflow-auto px-6 py-4" style={{ display: view === "list" ? "block" : "none" }}>
-        <ListView roles={roles} onEdit={c => openEdit(c.id)} onAddUnder={openAddUnder} />
+        <ListView roles={roles} onEdit={c => openEdit(c.id)} onAddUnder={openAddUnder} onShowNetwork={showNetwork} />
       </div>
 
       <div className="flex-1 overflow-hidden" style={{ display: view === "org" ? "flex" : "none", flexDirection: "column" }}>
-        <OrgView onEditById={openEdit} onAddUnder={openAddUnder} />
+        <OrgView onEditById={openEdit} onAddUnder={openAddUnder} focusedId={focusedId} />
       </div>
 
       <Modal open={modal} onClose={() => setModal(false)}
