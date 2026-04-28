@@ -85,56 +85,95 @@ function ScoreInput({ label, value, onChange }: {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
-function BarChart({ distribution }: { distribution: Record<number, number> }) {
-  const max = Math.max(...Object.values(distribution), 1);
+// ─── Componentes visuais do Dashboard ────────────────────────────────────────
+
+function ScoreGauge({ avg }: { avg: number | null }) {
+  const c = cls(avg);
+  const cfg = { seguro: { color: "#16a34a", label: "Confiança Alta" }, promissor: { color: "#d97706", label: "Confiança Moderada" }, incerto: { color: "#dc2626", label: "Confiança Baixa" }, none: { color: "#9ca3af", label: "Sem avaliações" } }[c];
+  const pct = avg !== null ? (avg / 10) * 100 : 0;
   return (
-    <div>
-      <div className="flex items-end gap-1 h-28 mb-1">
-        {Array.from({ length: 11 }, (_, i) => i).map(s => {
+    <div className="flex flex-col items-center gap-3">
+      <div className="relative w-36 h-36">
+        <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="#f3f4f6" strokeWidth="12" />
+          <circle cx="60" cy="60" r="50" fill="none" stroke={cfg.color} strokeWidth="12"
+            strokeDasharray={`${2 * Math.PI * 50 * pct / 100} ${2 * Math.PI * 50}`}
+            strokeLinecap="round" style={{ transition: "stroke-dasharray 0.6s ease" }} />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-4xl font-black text-gray-900">{avg ?? "—"}</span>
+          <span className="text-xs text-gray-400">de 10</span>
+        </div>
+      </div>
+      <div className="text-center">
+        <p className="text-sm font-semibold" style={{ color: cfg.color }}>{cfg.label}</p>
+      </div>
+    </div>
+  );
+}
+
+function DistributionBar({ byClass, scored }: { byClass: Stats["byClass"]; scored: number }) {
+  if (scored === 0) return <div className="h-4 bg-gray-100 rounded-full" />;
+  const pct = (n: number) => Math.max(0, Math.round(n / scored * 100));
+  const segs = [
+    { key: "seguro",    color: "#16a34a", label: "Seguros",     pct: pct(byClass.seguro) },
+    { key: "promissor", color: "#d97706", label: "Promissores", pct: pct(byClass.promissor) },
+    { key: "incerto",   color: "#dc2626", label: "Incertos",    pct: pct(byClass.incerto) },
+  ];
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex h-4 rounded-full overflow-hidden gap-0.5">
+        {segs.map(s => s.pct > 0 && (
+          <div key={s.key} className="h-full transition-all" title={`${s.label}: ${s.pct}%`}
+            style={{ width: `${s.pct}%`, backgroundColor: s.color }} />
+        ))}
+      </div>
+      <div className="flex items-center gap-4">
+        {segs.map(s => (
+          <div key={s.key} className="flex items-center gap-1.5">
+            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+            <span className="text-xs text-gray-500">{s.label} <strong className="text-gray-700">{s.pct}%</strong></span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NoteBarChart({ distribution }: { distribution: Record<number, number> }) {
+  const max = Math.max(...Object.values(distribution), 1);
+  const scores = Array.from({ length: 11 }, (_, i) => i);
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-end gap-1" style={{ height: 96 }}>
+        {scores.map(s => {
           const count = distribution[s] ?? 0;
-          const pct = count > 0 ? Math.max(6, Math.round(count / max * 100)) : 0;
+          const h = count > 0 ? Math.max(6, Math.round(count / max * 96)) : 2;
           const c = cls(s);
-          const color = c === "none" ? "#e5e7eb" : CLS[c].bg;
+          const color = c === "none" ? "#e5e7eb" : { seguro: "#16a34a", promissor: "#d97706", incerto: "#dc2626" }[c];
           return (
-            <div key={s} className="flex-1 flex flex-col items-center gap-0.5">
-              {count > 0 && <span className="text-xs text-gray-600 font-semibold leading-none">{count}</span>}
-              <div className="w-full rounded-t-sm transition-all" style={{ height: `${pct}%`, backgroundColor: color, minHeight: count > 0 ? 6 : 0 }} />
+            <div key={s} className="flex-1 flex flex-col items-center gap-0.5 group relative">
+              {count > 0 && (
+                <span className="text-xs text-gray-500 font-semibold leading-none">{count}</span>
+              )}
+              <div className="w-full rounded-t-sm" style={{ height: h, backgroundColor: color }} />
             </div>
           );
         })}
       </div>
       <div className="flex gap-1">
-        {Array.from({ length: 11 }, (_, i) => i).map(s => (
-          <div key={s} className="flex-1 text-center text-xs text-gray-400">{s}</div>
-        ))}
-      </div>
-      {/* Legenda */}
-      <div className="flex items-center gap-3 mt-2 justify-center">
-        {(["incerto","promissor","seguro"] as const).map(c => (
-          <span key={c} className="flex items-center gap-1 text-xs text-gray-500">
-            <span className="w-3 h-3 rounded-sm inline-block" style={{ backgroundColor: CLS[c].bg }} />
-            {CLS[c].label} {c === "incerto" ? "(0-4)" : c === "promissor" ? "(5-7)" : "(8-10)"}
-          </span>
-        ))}
+        {scores.map(s => <div key={s} className="flex-1 text-center text-xs text-gray-400">{s}</div>)}
       </div>
     </div>
   );
 }
 
-function BigCard({ label, value, bg, small }: { label: string; value: string | number; bg: string; small?: boolean }) {
+function StatCard({ label, value, sub, accent }: { label: string; value: string | number; sub?: string; accent?: string }) {
   return (
-    <div className="rounded-xl p-4 flex flex-col gap-1" style={{ backgroundColor: bg }}>
-      <p className="text-xs text-white/80 font-medium">{label}</p>
-      <p className={`text-white font-bold ${small ? "text-2xl" : "text-3xl"}`}>{value}</p>
-    </div>
-  );
-}
-
-function OutlineCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-xl border-2 border-gray-200 p-4 flex flex-col gap-1">
-      <p className="text-xs text-gray-500 font-medium">{label}</p>
-      <p className="text-2xl font-bold text-gray-900">{value}</p>
+    <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+      <p className="text-xs text-gray-400 font-medium uppercase tracking-wide mb-3">{label}</p>
+      <p className="text-3xl font-bold" style={{ color: accent ?? "#111827" }}>{value}</p>
+      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
     </div>
   );
 }
@@ -160,70 +199,102 @@ function TabDashboard({ stats, roles }: { stats: Stats | null; roles: PersonRole
     });
   }, []);
 
-  if (!stats) return <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>;
+  if (!stats) return (
+    <div className="flex justify-center py-20">
+      <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
 
   const pct = (n: number) => stats.scored > 0 ? Math.round(n / stats.scored * 100) : 0;
   const liderRole = roles.find(r => r.key === "LIDER");
   const liderCount = liderRole ? (counts[liderRole.id] ?? 0) : 0;
-  const metaLideres = goals.total_lideres;
-  const pctAlcancada = metaLideres ? Math.min(100, Math.round(liderCount / metaLideres * 100)) : null;
+  const pctAlcancada = goals.total_lideres ? Math.min(100, Math.round(liderCount / goals.total_lideres * 100)) : null;
+  const avgColor = stats.avg !== null ? { seguro: "#16a34a", promissor: "#d97706", incerto: "#dc2626", none: "#9ca3af" }[cls(stats.avg)] : "#9ca3af";
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Linha 1: Cards de classificação + gráfico */}
-      <div className="grid grid-cols-3 gap-4">
-        {/* Coluna: % */}
-        <div className="flex flex-col gap-3">
-          <BigCard label="% Seguros"    value={`${pct(stats.byClass.seguro)}%`}    bg="#16a34a" />
-          <BigCard label="% Promissores" value={`${pct(stats.byClass.promissor)}%`} bg="#f59e0b" />
-          <BigCard label="% Incertos"   value={`${pct(stats.byClass.incerto)}%`}   bg="#ef4444" />
-        </div>
-        {/* Coluna: Qtd */}
-        <div className="flex flex-col gap-3">
-          <BigCard label="Quantidade Seguros"    value={stats.byClass.seguro}    bg="#16a34a" />
-          <BigCard label="Quantidade Promissores" value={stats.byClass.promissor} bg="#f59e0b" />
-          <BigCard label="Quantidade Incertos"   value={stats.byClass.incerto}   bg="#ef4444" />
-        </div>
-        {/* Gráfico de barras */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <p className="text-sm font-semibold text-gray-700 mb-3">Quantidade por nota</p>
-          <BarChart distribution={stats.distribution} />
-        </div>
-      </div>
+    <div className="flex flex-col gap-6 max-w-5xl">
 
-      {/* Linha 2: métricas resumo */}
-      <div className="grid grid-cols-4 gap-4">
-        <OutlineCard label={`Total ${liderRole?.label ?? "Líderes"}`} value={liderCount.toLocaleString("pt-BR")} />
-        <OutlineCard label="Média de Confiança" value={stats.avg ?? "—"} />
-        <OutlineCard label={`Meta ${liderRole?.label ?? "Líderes"}`} value={metaLideres?.toLocaleString("pt-BR") ?? "—"} />
-        <OutlineCard label="% Alcançada" value={pctAlcancada !== null ? `${pctAlcancada}%` : "—"} />
-      </div>
+      {/* ── Seção 1: Herói — nota central + distribuição ── */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+        <div className="flex items-center gap-8">
+          {/* Gauge circular */}
+          <ScoreGauge avg={stats.avg} />
 
-      {/* Linha 3: por cargo */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
-          <p className="text-sm font-semibold text-gray-700">Nota média por cargo</p>
-        </div>
-        <div className="grid grid-cols-2 divide-x divide-gray-100">
-          {stats.byRole.map(r => (
-            <div key={r.id} className="px-4 py-3 flex items-center gap-4">
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full w-32 text-center shrink-0"
-                style={{ color: r.color, backgroundColor: r.bgColor }}>{r.label}</span>
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-lg font-bold text-gray-900">{r.avg ?? "—"}</span>
-                  <span className="text-xs text-gray-400">{r.scored} aval.</span>
-                </div>
-                {r.scored > 0 && (
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden flex">
-                    <div className="h-full bg-green-500" style={{ width: `${r.seguro/r.scored*100}%` }} />
-                    <div className="h-full bg-amber-400" style={{ width: `${r.promissor/r.scored*100}%` }} />
-                    <div className="h-full bg-red-400" style={{ width: `${r.incerto/r.scored*100}%` }} />
-                  </div>
-                )}
-              </div>
+          {/* Separador */}
+          <div className="w-px h-32 bg-gray-100 shrink-0" />
+
+          {/* Distribuição */}
+          <div className="flex-1 flex flex-col gap-4">
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Distribuição da base avaliada</p>
+              <DistributionBar byClass={stats.byClass} scored={stats.scored} />
             </div>
-          ))}
+            {/* 3 contadores */}
+            <div className="grid grid-cols-3 gap-3">
+              {([
+                { label: "Seguros",     count: stats.byClass.seguro,    color: "#16a34a", bg: "#f0fdf4" },
+                { label: "Promissores", count: stats.byClass.promissor, color: "#d97706", bg: "#fffbeb" },
+                { label: "Incertos",    count: stats.byClass.incerto,   color: "#dc2626", bg: "#fef2f2" },
+              ] as const).map(item => (
+                <div key={item.label} className="rounded-xl px-4 py-3" style={{ backgroundColor: item.bg }}>
+                  <p className="text-xs font-medium mb-1" style={{ color: item.color }}>{item.label}</p>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-2xl font-black" style={{ color: item.color }}>{item.count}</span>
+                    <span className="text-sm font-medium" style={{ color: item.color, opacity: 0.7 }}>{pct(item.count)}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Seção 2: KPIs secundários ── */}
+      <div className="grid grid-cols-4 gap-4">
+        <StatCard label="Total de Pessoas"  value={stats.total.toLocaleString("pt-BR")} sub="na rede" />
+        <StatCard label={`${liderRole?.label ?? "Líderes"}`} value={liderCount.toLocaleString("pt-BR")} sub={goals.total_lideres ? `meta: ${goals.total_lideres.toLocaleString("pt-BR")}` : undefined} />
+        <StatCard label="% Meta de Líderes" value={pctAlcancada !== null ? `${pctAlcancada}%` : "—"} sub="alcançada" accent={pctAlcancada !== null && pctAlcancada >= 80 ? "#16a34a" : pctAlcancada !== null && pctAlcancada >= 50 ? "#d97706" : undefined} />
+        <StatCard label="Avaliados"         value={stats.scored.toLocaleString("pt-BR")} sub={`de ${stats.total.toLocaleString("pt-BR")} (${stats.total > 0 ? Math.round(stats.scored/stats.total*100) : 0}%)`} />
+      </div>
+
+      {/* ── Seção 3: Gráfico + por cargo ── */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Gráfico de barras por nota */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">Quantidade por nota (0–10)</p>
+          <NoteBarChart distribution={stats.distribution} />
+        </div>
+
+        {/* Por cargo */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-50">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Nota média por cargo</p>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {stats.byRole.map(r => (
+              <div key={r.id} className="px-5 py-3.5 flex items-center gap-4">
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full shrink-0"
+                  style={{ color: r.color, backgroundColor: r.bgColor }}>{r.label}</span>
+                <div className="flex-1 min-w-0">
+                  {r.scored > 0 ? (
+                    <>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-base font-bold text-gray-900">{r.avg}</span>
+                        <span className="text-xs text-gray-400">{r.scored} aval.</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden flex">
+                        <div className="h-full bg-green-500" style={{ width: `${r.seguro/r.scored*100}%` }} />
+                        <div className="h-full bg-amber-400" style={{ width: `${r.promissor/r.scored*100}%` }} />
+                        <div className="h-full bg-red-400"  style={{ width: `${r.incerto/r.scored*100}%` }} />
+                      </div>
+                    </>
+                  ) : (
+                    <span className="text-xs text-gray-400 italic">Sem avaliações</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
