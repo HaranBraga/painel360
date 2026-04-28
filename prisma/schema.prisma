@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model PersonRole {
+  id        String    @id @default(cuid())
+  key       String    @unique
+  label     String
+  color     String    @default("#6366f1")
+  bgColor   String    @default("#eef2ff")
+  level     Int       @default(0)
+  contacts  Contact[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+enum Direction {
+  IN
+  OUT
+}
+
+enum DispatchStatus {
+  PENDING
+  SENDING
+  DONE
+  FAILED
+}
+
+model Contact {
+  id              String     @id @default(cuid())
+  name            String
+  phone           String     @unique
+  email           String?
+  roleId          String
+  role            PersonRole @relation(fields: [roleId], references: [id])
+  parentId        String?
+  parent          Contact?   @relation("Hierarchy", fields: [parentId], references: [id])
+  children        Contact[]  @relation("Hierarchy")
+  lastContactAt   DateTime?
+  lastMessage     String?
+  notes           String?
+  externalId      String?
+  labels          String[]   @default([])
+  source          String     @default("message")
+  profilePhotoUrl String?
+
+  conversations Conversation[]
+  groupMembers  GroupMember[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([phone])
+  @@index([roleId])
+  @@index([source])
+}
+
+model KanbanStatus {
+  id        String   @id @default(cuid())
+  name      String
+  color     String   @default("#6366f1")
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  conversations Conversation[]
+}
+
+model Conversation {
+  id              String       @id @default(cuid())
+  contactId       String
+  contact         Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  statusId        String
+  status          KanbanStatus @relation(fields: [statusId], references: [id])
+  whatsappChatId  String?
+  lastMessageAt   DateTime?
+  lastMessageText String?
+  messages        Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([contactId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  content        String
+  direction      Direction    @default(OUT)
+  whatsappMsgId  String?
+  mediaType      String?
+  rawData        Json?
+  sentAt         DateTime     @default(now())
+}
+
+model ContactGroup {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  date        DateTime?
+  members     GroupMember[]
+  dispatches  Dispatch[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model GroupMember {
+  contactId String
+  groupId   String
+  contact   Contact      @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  group     ContactGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, groupId])
+}
+
+model Dispatch {
+  id        String           @id @default(cuid())
+  groupId   String
+  group     ContactGroup     @relation(fields: [groupId], references: [id])
+  message   String
+  status    DispatchStatus   @default(PENDING)
+  sentAt    DateTime?
+  results   DispatchResult[]
+  createdAt DateTime         @default(now())
+}
+
+model DispatchResult {
+  id          String   @id @default(cuid())
+  dispatchId  String
+  dispatch    Dispatch @relation(fields: [dispatchId], references: [id], onDelete: Cascade)
+  contactId   String
+  contactName String
+  phone       String
+  success     Boolean  @default(false)
+  error       String?
+  sentAt      DateTime @default(now())
+}
