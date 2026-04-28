@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 const roleInclude = { select: { id: true, key: true, label: true, color: true, bgColor: true, level: true } };
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const { label, color, bgColor, level } = await req.json();
   const role = await prisma.personRole.update({
