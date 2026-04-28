@@ -391,10 +391,13 @@ const OrgNode = memo(function OrgNode({ id, childrenMap, contactMap, sizes, defa
 function OrgView({ onEditById, onDeleteById }: {
   onEditById: (id: string) => void; onDeleteById: (id: string) => void;
 }) {
-  const [contacts, setContacts] = useState<TreeContact[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [zoom, setZoom]         = useState(0.85);
-  const containerRef            = useRef<HTMLDivElement>(null);
+  const [contacts, setContacts]   = useState<TreeContact[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [zoom, setZoom]           = useState(0.9);
+  const [pan, setPan]             = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const lastMouseRef              = useRef({ x: 0, y: 0 });
+  const containerRef              = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -406,17 +409,44 @@ function OrgView({ onEditById, onDeleteById }: {
 
   useEffect(() => { load(); }, [load]);
 
+  // Scroll = zoom ao cursor (estilo Figma)
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
-      setZoom(z => Math.min(Math.max(z - e.deltaY * 0.002, 0.2), 2));
+      const rect = el.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const delta = e.deltaMode === 1 ? e.deltaY * 0.05 : e.deltaY * 0.0015;
+      setZoom(prev => {
+        const next = Math.min(Math.max(prev * (1 - delta), 0.1), 4);
+        setPan(p => ({
+          x: mx - (mx - p.x) * (next / prev),
+          y: my - (my - p.y) * (next / prev),
+        }));
+        return next;
+      });
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
+
+  // Drag = pan (não inicia em botões)
+  function onMouseDown(e: React.MouseEvent) {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest("button")) return;
+    setIsDragging(true);
+    lastMouseRef.current = { x: e.clientX, y: e.clientY };
+  }
+  function onMouseMove(e: React.MouseEvent) {
+    if (!isDragging) return;
+    const dx = e.clientX - lastMouseRef.current.x;
+    const dy = e.clientY - lastMouseRef.current.y;
+    lastMouseRef.current = { x: e.clientX, y: e.clientY };
+    setPan(p => ({ x: p.x + dx, y: p.y + dy }));
+  }
+  function onMouseUp() { setIsDragging(false); }
 
   const { childrenMap, sizes } = buildNetworkSizes(contacts);
   const contactMap = new Map(contacts.map(c => [c.id, c]));
@@ -439,13 +469,38 @@ function OrgView({ onEditById, onDeleteById }: {
   );
 
   return (
-    <div className="relative h-full overflow-hidden">
-      {/* Área do organograma */}
-      <div ref={containerRef} className="h-full overflow-auto scrollbar-hide" style={{ cursor: "grab" }}>
-        <div
-          style={{ transform: `scale(${zoom})`, transformOrigin: "top center", transition: "transform 0.15s" }}
-          className="flex gap-20 justify-center min-w-max pt-6 px-16 pb-16"
-        >
+    <div
+      ref={containerRef}
+      className="relative h-full overflow-hidden select-none"
+      style={{ cursor: isDragging ? "grabbing" : "grab", background: "#f8fafc" }}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseUp}
+    >
+      {/* Grid pontilhado estilo Figma */}
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          backgroundImage: "radial-gradient(circle, #cbd5e1 1px, transparent 1px)",
+          backgroundSize: `${28 * zoom}px ${28 * zoom}px`,
+          backgroundPosition: `${pan.x % (28 * zoom)}px ${pan.y % (28 * zoom)}px`,
+          opacity: 0.5,
+        }}
+      />
+
+      {/* Canvas transformado */}
+      <div
+        style={{
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          transformOrigin: "0 0",
+          position: "absolute",
+          top: 0, left: 0,
+          width: "100%",
+          willChange: "transform",
+        }}
+      >
+        <div className="flex gap-20 justify-center pt-10 px-16 pb-20 min-w-max">
           {roots.map(root => (
             <OrgNode
               key={root.id}
@@ -462,18 +517,18 @@ function OrgView({ onEditById, onDeleteById }: {
       </div>
 
       {/* Controles de zoom */}
-      <div className="absolute bottom-4 right-4 flex items-center gap-1 bg-white rounded-xl border border-gray-200 shadow-md p-1.5">
-        <button onClick={() => setZoom(z => Math.min(z + 0.1, 2))} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600"><ZoomIn size={14} /></button>
+      <div className="absolute bottom-4 right-4 flex items-center gap-1 bg-white rounded-xl border border-gray-200 shadow-md p-1.5 pointer-events-auto">
+        <button onClick={() => setZoom(z => Math.min(z + 0.15, 4))} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600"><ZoomIn size={14} /></button>
         <span className="text-xs text-gray-500 w-10 text-center font-mono">{Math.round(zoom * 100)}%</span>
-        <button onClick={() => setZoom(z => Math.max(z - 0.1, 0.2))} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600"><ZoomOut size={14} /></button>
+        <button onClick={() => setZoom(z => Math.max(z - 0.15, 0.1))} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600"><ZoomOut size={14} /></button>
         <div className="w-px h-4 bg-gray-200 mx-0.5" />
-        <button onClick={() => setZoom(0.85)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600" title="Reset"><Maximize2 size={13} /></button>
+        <button onClick={() => { setZoom(0.9); setPan({ x: 0, y: 0 }); }} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600" title="Resetar"><Maximize2 size={13} /></button>
         <button onClick={load} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600" title="Recarregar"><RefreshCw size={13} /></button>
       </div>
 
-      {/* Legenda Ctrl+scroll */}
-      <div className="absolute bottom-4 left-4 text-xs text-gray-400 bg-white/80 backdrop-blur-sm rounded-lg px-2 py-1 border border-gray-100">
-        Ctrl + scroll para zoom · {contacts.length.toLocaleString("pt-BR")} pessoas
+      {/* Legenda */}
+      <div className="absolute bottom-4 left-4 text-xs text-gray-400 bg-white/90 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border border-gray-100 pointer-events-none">
+        Scroll para zoom · Arrastar para mover · {contacts.length.toLocaleString("pt-BR")} pessoas
       </div>
     </div>
   );
