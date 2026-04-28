@@ -1,11 +1,12 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, Settings, Grid3X3 } from "lucide-react";
+import { Users, Settings, Grid3X3, Star } from "lucide-react";
 
 const nav = [
-  { href: "/pessoas", label: "Pessoas", icon: Users },
-  { href: "/configuracoes", label: "Configurações", icon: Settings },
+  { href: "/pessoas",       label: "Pessoas",        icon: Users },
+  { href: "/score",         label: "Score",           icon: Star },
+  { href: "/configuracoes", label: "Configurações",   icon: Settings },
 ];
 
 export function Sidebar() {
@@ -22,15 +23,10 @@ export function Sidebar() {
         {nav.map(({ href, label, icon: Icon }) => {
           const active = path === href || path.startsWith(href + "/");
           return (
-            <Link
-              key={href}
-              href={href}
+            <Link key={href} href={href}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                active
-                  ? "bg-brand-50 text-brand-700"
-                  : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-              }`}
-            >
+                active ? "bg-brand-50 text-brand-700" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+              }`}>
               <Icon size={18} />
               {label}
             </Link>

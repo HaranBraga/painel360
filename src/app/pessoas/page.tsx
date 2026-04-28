@@ -730,6 +730,16 @@ export default function PessoasPage() {
 
   useEffect(() => { loadRoles(); loadCount(); }, [loadRoles, loadCount]);
 
+  // Bloqueia zoom do navegador (Ctrl+Scroll) quando a aba Rede está ativa
+  useEffect(() => {
+    if (view !== "org") return;
+    const block = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) e.preventDefault();
+    };
+    document.addEventListener("wheel", block, { passive: false });
+    return () => document.removeEventListener("wheel", block);
+  }, [view]);
+
   function openNew() { setPreset({}); setModal(true); }
 
   function showNetwork(c: Contact) {

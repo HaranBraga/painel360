@@ -49,6 +49,9 @@ model Contact {
   cidade          String?
   zona            String?
 
+  score           Float?
+  scoreNote       String?
+
   lastContactAt   DateTime?
   lastMessage     String?
   notes           String?
