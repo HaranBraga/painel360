@@ -621,6 +621,7 @@ function OrgView({ onEditById, onAddUnder }: {
   useEffect(() => {
     const el = containerRef.current; if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return; // só zoom com Ctrl/Cmd segurado
       e.preventDefault();
       const rect = el.getBoundingClientRect();
       const mx = e.clientX - rect.left, my = e.clientY - rect.top;
@@ -692,7 +693,7 @@ function OrgView({ onEditById, onAddUnder }: {
         <button onClick={load} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600"><RefreshCw size={13} /></button>
       </div>
       <div className="absolute bottom-4 left-4 text-xs text-gray-400 bg-white/90 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border border-gray-100 pointer-events-none">
-        Scroll = zoom · Arrastar = mover · {contacts.length.toLocaleString("pt-BR")} pessoas
+        Ctrl + Scroll = zoom · Arrastar = mover · {contacts.length.toLocaleString("pt-BR")} pessoas
       </div>
     </div>
   );
