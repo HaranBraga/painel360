@@ -41,6 +41,14 @@ model Contact {
   parentId        String?
   parent          Contact?   @relation("Hierarchy", fields: [parentId], references: [id])
   children        Contact[]  @relation("Hierarchy")
+
+  dataNascimento  DateTime?
+  genero          String?
+  rua             String?
+  bairro          String?
+  cidade          String?
+  zona            String?
+
   lastContactAt   DateTime?
   lastMessage     String?
   notes           String?
@@ -56,6 +64,8 @@ model Contact {
   updatedAt DateTime @updatedAt
 
   @@index([phone])
+  @@index([cidade])
+  @@index([zona])
   @@index([roleId])
   @@index([source])
 }
