@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
 import {
   Plus, Search, ChevronRight, Trash2, Edit2, List, Network,
-  Users, ChevronDown, ZoomIn, ZoomOut, Maximize2, RefreshCw,
+  Users, ChevronDown, ZoomIn, ZoomOut, Maximize2, RefreshCw, X, UserPlus,
 } from "lucide-react";
 import { RoleBadge, type PersonRole } from "@/components/ui/RoleBadge";
 import { Modal } from "@/components/ui/Modal";
@@ -20,8 +20,7 @@ interface Contact {
 }
 
 interface TreeContact {
-  id: string; name: string; parentId: string | null;
-  role: PersonRole;
+  id: string; name: string; parentId: string | null; role: PersonRole;
 }
 
 function withBR(phone: string) {
@@ -33,22 +32,104 @@ function stripBR(phone: string) {
   return d.startsWith("55") ? d.slice(2) : d;
 }
 
+// ─── Busca de responsável (autocomplete via API) ───────────────────────────────
+
+function ParentSearch({ value, displayName, onChange, maxLevel, excludeId }: {
+  value: string; displayName: string;
+  onChange: (id: string, name: string) => void;
+  maxLevel: number; excludeId?: string;
+}) {
+  const [query, setQuery]     = useState(displayName);
+  const [results, setResults] = useState<Contact[]>([]);
+  const [open, setOpen]       = useState(false);
+  const debounce              = useRef<NodeJS.Timeout>();
+
+  useEffect(() => { setQuery(displayName); }, [displayName]);
+
+  function search(q: string) {
+    setQuery(q);
+    if (!q) { onChange("", ""); setResults([]); setOpen(false); return; }
+    clearTimeout(debounce.current);
+    debounce.current = setTimeout(async () => {
+      const r = await fetch(`/api/contacts?search=${encodeURIComponent(q)}&limit=20`);
+      const d = await r.json();
+      const filtered = (d.contacts ?? []).filter(
+        (c: Contact) => c.role.level < maxLevel && c.id !== excludeId
+      );
+      setResults(filtered);
+      setOpen(true);
+    }, 300);
+  }
+
+  return (
+    <div className="relative">
+      <input
+        value={query}
+        onChange={e => search(e.target.value)}
+        onFocus={() => { if (query) search(query); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder="Buscar responsável pelo nome..."
+        className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 pr-8"
+      />
+      {value && (
+        <button type="button" onClick={() => { onChange("", ""); setQuery(""); setResults([]); }}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+          <X size={13} />
+        </button>
+      )}
+      {open && results.length > 0 && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-52 overflow-y-auto">
+          {results.map(c => (
+            <button key={c.id} type="button"
+              onMouseDown={() => { onChange(c.id, c.name); setQuery(c.name); setOpen(false); }}
+              className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 flex items-center gap-2 border-b border-gray-50 last:border-0">
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                style={{ backgroundColor: c.role.bgColor, color: c.role.color }}>
+                {c.name[0]}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-gray-900 truncate">{c.name}</p>
+                <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ color: c.role.color, backgroundColor: c.role.bgColor }}>{c.role.label}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+      {open && results.length === 0 && query.length > 1 && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg px-3 py-3 text-sm text-gray-400">
+          Nenhum responsável encontrado para "{query}"
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Formulário ───────────────────────────────────────────────────────────────
 
-function PersonForm({ initial, onSave, onClose, contacts, roles }: {
-  initial?: Partial<Contact>; onSave: () => void; onClose: () => void;
-  contacts: Contact[]; roles: PersonRole[];
+interface FormInitial {
+  id?: string; name?: string; phone?: string; email?: string;
+  roleId?: string; parentId?: string | null; notes?: string;
+  dataNascimento?: string; genero?: string;
+  rua?: string; bairro?: string; cidade?: string; zona?: string;
+  _parentName?: string;
+}
+
+function PersonForm({ initial, onSave, onClose, roles }: {
+  initial?: FormInitial; onSave: () => void; onClose: () => void; roles: PersonRole[];
 }) {
+  const defaultRoleId = roles[roles.length - 1]?.id ?? "";
   const [form, setForm] = useState({
-    name: "", email: "", notes: "", genero: "", rua: "", bairro: "", cidade: "", zona: "",
+    name: "", email: "", notes: "", genero: "", rua: "", bairro: "", cidade: "", zona: "", dataNascimento: "",
     ...initial,
     phone: initial?.phone ? stripBR(initial.phone) : "",
-    roleId: initial?.roleId ?? roles[roles.length - 1]?.id ?? "",
+    roleId: initial?.roleId ?? defaultRoleId,
     parentId: initial?.parentId ?? "",
-    dataNascimento: initial?.dataNascimento ? initial.dataNascimento.slice(0, 10) : "",
   });
+  const [parentName, setParentName] = useState(initial?._parentName ?? "");
   const [saving, setSaving] = useState(false);
-  const f = (k: string) => (e: any) => setForm((p) => ({ ...p, [k]: e.target.value }));
+  const f = (k: string) => (e: any) => setForm(p => ({ ...p, [k]: e.target.value }));
+
+  const currentRole = roles.find(r => r.id === form.roleId);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setSaving(true);
@@ -65,13 +146,7 @@ function PersonForm({ initial, onSave, onClose, contacts, roles }: {
     } finally { setSaving(false); }
   }
 
-  const currentRole = roles.find(r => r.id === form.roleId);
-  const eligibleParents = contacts.filter((c) => {
-    const pr = roles.find(r => r.id === c.roleId);
-    return c.id !== initial?.id && pr && currentRole && pr.level < currentRole.level;
-  });
-
-  const input = "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
+  const inp = "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500";
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-5">
@@ -81,7 +156,7 @@ function PersonForm({ initial, onSave, onClose, contacts, roles }: {
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Nome completo *</label>
-            <input required value={form.name} onChange={f("name")} className={input} />
+            <input required value={form.name} onChange={f("name")} className={inp} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Telefone * <span className="text-xs text-gray-400">DDD + número</span></label>
@@ -92,20 +167,23 @@ function PersonForm({ initial, onSave, onClose, contacts, roles }: {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
-            <input type="email" value={form.email} onChange={f("email")} className={input} />
+            <input type="email" value={form.email} onChange={f("email")} className={inp} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
-            <select value={form.roleId} onChange={f("roleId")} className={input}>
-              {roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+            <select value={form.roleId} onChange={f("roleId")} className={inp}>
+              {roles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Responsável (superior)</label>
-            <select value={form.parentId} onChange={f("parentId")} className={input}>
-              <option value="">— Nenhum —</option>
-              {eligibleParents.map((c) => <option key={c.id} value={c.id}>{c.name} — {c.role.label}</option>)}
-            </select>
+            <ParentSearch
+              value={form.parentId as string}
+              displayName={parentName}
+              maxLevel={currentRole?.level ?? 99}
+              excludeId={initial?.id}
+              onChange={(id, name) => { setForm(p => ({ ...p, parentId: id })); setParentName(name); }}
+            />
           </div>
         </div>
       </div>
@@ -116,11 +194,11 @@ function PersonForm({ initial, onSave, onClose, contacts, roles }: {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Data de Nascimento</label>
-            <input type="date" value={form.dataNascimento} onChange={f("dataNascimento")} className={input} />
+            <input type="date" value={form.dataNascimento} onChange={f("dataNascimento")} className={inp} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Gênero</label>
-            <select value={form.genero} onChange={f("genero")} className={input}>
+            <select value={form.genero} onChange={f("genero")} className={inp}>
               <option value="">— Selecionar —</option>
               <option value="Masculino">Masculino</option>
               <option value="Feminino">Feminino</option>
@@ -136,19 +214,19 @@ function PersonForm({ initial, onSave, onClose, contacts, roles }: {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Rua</label>
-            <input value={form.rua} onChange={f("rua")} className={input} />
+            <input value={form.rua} onChange={f("rua")} className={inp} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Bairro</label>
-            <input value={form.bairro} onChange={f("bairro")} className={input} />
+            <input value={form.bairro} onChange={f("bairro")} className={inp} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Cidade</label>
-            <input value={form.cidade} onChange={f("cidade")} className={input} />
+            <input value={form.cidade} onChange={f("cidade")} className={inp} />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Zona</label>
-            <select value={form.zona} onChange={f("zona")} className={input}>
+            <select value={form.zona} onChange={f("zona")} className={inp}>
               <option value="">— Selecionar —</option>
               <option value="Urbano">Urbano</option>
               <option value="Rural">Rural</option>
@@ -160,30 +238,70 @@ function PersonForm({ initial, onSave, onClose, contacts, roles }: {
       {/* Observações */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
-        <textarea rows={2} value={form.notes} onChange={f("notes")} className={`${input} resize-none`} />
+        <textarea rows={2} value={form.notes} onChange={f("notes")} className={`${inp} resize-none`} />
       </div>
 
       <div className="flex justify-end gap-3 pt-1 border-t border-gray-100">
         <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">Cancelar</button>
-        <button disabled={saving} className="px-5 py-2 text-sm text-white bg-brand-600 hover:bg-brand-700 disabled:opacity-50 rounded-lg font-medium">{saving ? "Salvando..." : "Salvar"}</button>
+        <button disabled={saving} className="px-5 py-2 text-sm text-white bg-brand-600 hover:bg-brand-700 disabled:opacity-50 rounded-lg font-medium">
+          {saving ? "Salvando..." : "Salvar"}
+        </button>
       </div>
     </form>
   );
 }
 
-// ─── Vista em lista (paginada) ────────────────────────────────────────────────
+// ─── Vista em lista com filtro de rede ───────────────────────────────────────
 
-function ListView({ roles, onEdit, onDelete }: {
-  roles: PersonRole[]; onEdit: (c: Contact) => void; onDelete: (c: Contact) => void;
+function buildDescendants(rootId: string, childrenMap: Map<string, string[]>): Set<string> {
+  const result = new Set<string>();
+  const stack = [rootId];
+  while (stack.length) {
+    const id = stack.pop()!;
+    result.add(id);
+    for (const child of childrenMap.get(id) ?? []) stack.push(child);
+  }
+  return result;
+}
+
+function ListView({ roles, onEdit, onQuickAdd }: {
+  roles: PersonRole[];
+  onEdit: (c: Contact) => void;
+  onQuickAdd: (parent: Contact) => void;
 }) {
-  const [contacts, setContacts]   = useState<Contact[]>([]);
-  const [total, setTotal]         = useState(0);
-  const [page, setPage]           = useState(1);
-  const [pages, setPages]         = useState(1);
-  const [search, setSearch]       = useState("");
+  const [contacts, setContacts]     = useState<Contact[]>([]);
+  const [total, setTotal]           = useState(0);
+  const [page, setPage]             = useState(1);
+  const [pages, setPages]           = useState(1);
+  const [search, setSearch]         = useState("");
   const [roleFilter, setRoleFilter] = useState("");
-  const [loading, setLoading]     = useState(false);
-  const debounceRef = useRef<NodeJS.Timeout>();
+  const [loading, setLoading]       = useState(false);
+
+  // Filtro de rede
+  const [netSearch, setNetSearch]         = useState("");
+  const [netResults, setNetResults]       = useState<Contact[]>([]);
+  const [netOpen, setNetOpen]             = useState(false);
+  const [networkRoot, setNetworkRoot]     = useState<Contact | null>(null);
+  const [treeContacts, setTreeContacts]   = useState<TreeContact[]>([]);
+  const [descendantIds, setDescendantIds] = useState<Set<string> | null>(null);
+  const netDebounce = useRef<NodeJS.Timeout>();
+  const searchDebounce = useRef<NodeJS.Timeout>();
+
+  // Carrega tree quando entra em modo rede
+  useEffect(() => {
+    if (!networkRoot) { setDescendantIds(null); setTreeContacts([]); return; }
+    fetch("/api/contacts/tree").then(r => r.json()).then((data: TreeContact[]) => {
+      setTreeContacts(data);
+      const childrenMap = new Map<string, string[]>();
+      for (const c of data) {
+        if (c.parentId) {
+          if (!childrenMap.has(c.parentId)) childrenMap.set(c.parentId, []);
+          childrenMap.get(c.parentId)!.push(c.id);
+        }
+      }
+      setDescendantIds(buildDescendants(networkRoot.id, childrenMap));
+    });
+  }, [networkRoot]);
 
   const load = useCallback(async (p = 1, q = search, r = roleFilter) => {
     setLoading(true);
@@ -193,55 +311,137 @@ function ListView({ roles, onEdit, onDelete }: {
       if (r) params.set("roleId", r);
       const res = await fetch(`/api/contacts?${params}`);
       const data = await res.json();
-      setContacts(data.contacts);
-      setTotal(data.total);
-      setPage(data.page);
-      setPages(data.pages);
+      setContacts(data.contacts ?? []);
+      setTotal(data.total ?? 0);
+      setPage(data.page ?? 1);
+      setPages(data.pages ?? 1);
     } finally { setLoading(false); }
   }, [search, roleFilter]);
 
   useEffect(() => { load(1); }, []);
 
-  function onSearch(v: string) {
+  function onSearchInput(v: string) {
     setSearch(v);
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => load(1, v, roleFilter), 400);
+    clearTimeout(searchDebounce.current);
+    searchDebounce.current = setTimeout(() => load(1, v, roleFilter), 400);
   }
-  function onRoleFilter(v: string) {
-    setRoleFilter(v);
-    load(1, search, v);
+  function onRoleFilter(v: string) { setRoleFilter(v); load(1, search, v); }
+
+  function searchNetwork(q: string) {
+    setNetSearch(q);
+    if (!q) { setNetResults([]); setNetOpen(false); return; }
+    clearTimeout(netDebounce.current);
+    netDebounce.current = setTimeout(async () => {
+      const r = await fetch(`/api/contacts?search=${encodeURIComponent(q)}&limit=10`);
+      const d = await r.json();
+      setNetResults(d.contacts ?? []);
+      setNetOpen(true);
+    }, 300);
   }
 
+  async function del(id: string, name: string) {
+    if (!confirm(`Deletar "${name}"?`)) return;
+    await fetch(`/api/contacts/${id}`, { method: "DELETE" });
+    toast.success("Pessoa removida");
+    load(1);
+  }
+
+  // Filtra pela rede se modo ativo
+  const displayed = descendantIds
+    ? contacts.filter(c => descendantIds.has(c.id) && c.id !== networkRoot?.id)
+    : contacts;
+
   const grouped = roles.reduce<Record<string, Contact[]>>((acc, role) => {
-    acc[role.id] = contacts.filter((c) => c.roleId === role.id);
+    acc[role.id] = displayed.filter(c => c.roleId === role.id);
     return acc;
   }, {});
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Barra de filtros */}
+      {/* Filtros */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-48">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input value={search} onChange={(e) => onSearch(e.target.value)} placeholder="Buscar por nome..." className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
+          <input value={search} onChange={e => onSearchInput(e.target.value)} placeholder="Buscar por nome..."
+            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
-        <select value={roleFilter} onChange={(e) => onRoleFilter(e.target.value)} className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
+        <select value={roleFilter} onChange={e => onRoleFilter(e.target.value)}
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
           <option value="">Todos os cargos</option>
-          {roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+          {roles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
         </select>
-        <span className="text-xs text-gray-400 ml-auto">{total.toLocaleString("pt-BR")} pessoas</span>
+        <span className="text-xs text-gray-400">{total.toLocaleString("pt-BR")} pessoas</span>
+      </div>
+
+      {/* Filtro de rede */}
+      <div className="bg-white border border-gray-200 rounded-xl p-3">
+        {networkRoot ? (
+          <div className="flex items-center gap-3">
+            <div className="flex-1 flex items-center gap-2">
+              <Network size={14} className="text-brand-600" />
+              <span className="text-sm font-medium text-gray-700">Rede de:</span>
+              <div className="flex items-center gap-1.5 bg-brand-50 border border-brand-200 rounded-lg px-2.5 py-1">
+                <div className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
+                  style={{ backgroundColor: networkRoot.role.bgColor, color: networkRoot.role.color }}>
+                  {networkRoot.name[0]}
+                </div>
+                <span className="text-sm font-semibold text-brand-700">{networkRoot.name}</span>
+                <span className="text-xs" style={{ color: networkRoot.role.color }}>({networkRoot.role.label})</span>
+              </div>
+              {descendantIds && (
+                <span className="text-xs text-gray-400">
+                  {(descendantIds.size - 1).toLocaleString("pt-BR")} pessoas na rede
+                </span>
+              )}
+            </div>
+            <button onClick={() => { setNetworkRoot(null); setNetSearch(""); }}
+              className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 border border-gray-200 rounded-lg px-2 py-1 hover:bg-gray-50">
+              <X size={12} /> Ver todos
+            </button>
+          </div>
+        ) : (
+          <div className="relative">
+            <div className="flex items-center gap-2">
+              <Network size={14} className="text-gray-400 shrink-0" />
+              <input
+                value={netSearch}
+                onChange={e => searchNetwork(e.target.value)}
+                onBlur={() => setTimeout(() => setNetOpen(false), 150)}
+                placeholder="Filtrar por rede de um coordenador ou líder..."
+                className="flex-1 text-sm focus:outline-none text-gray-700 placeholder:text-gray-400"
+              />
+            </div>
+            {netOpen && netResults.length > 0 && (
+              <div className="absolute z-50 top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                {netResults.map(c => (
+                  <button key={c.id} type="button"
+                    onMouseDown={() => { setNetworkRoot(c); setNetSearch(c.name); setNetOpen(false); load(1); }}
+                    className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 flex items-center gap-2 border-b border-gray-50 last:border-0">
+                    <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                      style={{ backgroundColor: c.role.bgColor, color: c.role.color }}>{c.name[0]}</div>
+                    <div>
+                      <p className="font-medium text-gray-900">{c.name}</p>
+                      <span className="text-xs px-1.5 py-0.5 rounded-full"
+                        style={{ color: c.role.color, backgroundColor: c.role.bgColor }}>{c.role.label}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {loading && <div className="flex justify-center py-8"><div className="w-6 h-6 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" /></div>}
 
-      {!loading && contacts.length === 0 && (
+      {!loading && displayed.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-gray-400">
           <Users size={40} className="mb-3 opacity-30" />
           <p className="font-medium">Nenhuma pessoa encontrada</p>
         </div>
       )}
 
-      {!loading && roles.map((role) => {
+      {!loading && roles.map(role => {
         const group = grouped[role.id] ?? [];
         if (group.length === 0) return null;
         return (
@@ -249,11 +449,18 @@ function ListView({ roles, onEdit, onDelete }: {
             <div className="flex items-center gap-2 mb-2">
               <RoleBadge role={role} />
               <span className="text-xs text-gray-400">{group.length}</span>
+              {networkRoot && (
+                <button onClick={() => onQuickAdd({ roleId: role.id, role, parentId: networkRoot.id, _parentName: networkRoot.name } as any)}
+                  className="ml-auto flex items-center gap-1 text-xs text-brand-600 hover:text-brand-700 border border-brand-200 hover:border-brand-400 bg-brand-50 rounded-lg px-2 py-0.5 transition-colors">
+                  <UserPlus size={11} /> Adicionar {role.label}
+                </button>
+              )}
             </div>
             <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
-              {group.map((c) => (
+              {group.map(c => (
                 <div key={c.id} className="flex items-center gap-4 px-4 py-3 hover:bg-gray-50 group">
-                  <div className="w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm shrink-0" style={{ backgroundColor: c.role.bgColor, color: c.role.color }}>
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center font-semibold text-sm shrink-0"
+                    style={{ backgroundColor: c.role.bgColor, color: c.role.color }}>
                     {c.name[0].toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -268,8 +475,11 @@ function ListView({ roles, onEdit, onDelete }: {
                     )}
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => onQuickAdd({ ...c, _parentName: c.name } as any)}
+                      title="Adicionar pessoa nesta rede"
+                      className="p-1.5 hover:bg-brand-50 rounded text-brand-400"><UserPlus size={13} /></button>
                     <button onClick={() => onEdit(c)} className="p-1.5 hover:bg-gray-200 rounded text-gray-500"><Edit2 size={14} /></button>
-                    <button onClick={() => onDelete(c)} className="p-1.5 hover:bg-red-100 rounded text-red-400"><Trash2 size={14} /></button>
+                    <button onClick={() => del(c.id, c.name)} className="p-1.5 hover:bg-red-100 rounded text-red-400"><Trash2 size={14} /></button>
                   </div>
                 </div>
               ))}
@@ -278,8 +488,7 @@ function ListView({ roles, onEdit, onDelete }: {
         );
       })}
 
-      {/* Paginação */}
-      {pages > 1 && (
+      {!networkRoot && pages > 1 && (
         <div className="flex items-center justify-center gap-2 pt-2">
           <button disabled={page <= 1} onClick={() => load(page - 1)} className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg disabled:opacity-40 hover:bg-gray-50">← Anterior</button>
           <span className="text-sm text-gray-500">Página {page} de {pages}</span>
@@ -290,7 +499,7 @@ function ListView({ roles, onEdit, onDelete }: {
   );
 }
 
-// ─── Organograma escalável com zoom ──────────────────────────────────────────
+// ─── Organograma (escalável) ──────────────────────────────────────────────────
 
 function buildNetworkSizes(contacts: TreeContact[]) {
   const childrenMap = new Map<string, string[]>();
@@ -312,26 +521,31 @@ function buildNetworkSizes(contacts: TreeContact[]) {
   return { childrenMap, sizes };
 }
 
-const OrgCard = memo(function OrgCard({ contact, networkSize, onEdit, onDelete }: {
+const OrgCard = memo(function OrgCard({ contact, networkSize, onEdit, onDelete, onAdd }: {
   contact: TreeContact; networkSize: number;
-  onEdit: (id: string) => void; onDelete: (id: string) => void;
+  onEdit: (id: string) => void; onDelete: (id: string) => void; onAdd: (c: TreeContact) => void;
 }) {
   return (
-    <div
-      className="relative group bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-brand-200 transition-all w-36"
-      style={{ borderLeftWidth: 3, borderLeftColor: contact.role.color }}
-    >
+    <div className="relative group bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-brand-200 transition-all w-36"
+      style={{ borderLeftWidth: 3, borderLeftColor: contact.role.color }}>
       <div className="p-2.5 flex flex-col items-center gap-1.5">
-        <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm" style={{ backgroundColor: contact.role.bgColor, color: contact.role.color }}>
+        <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm"
+          style={{ backgroundColor: contact.role.bgColor, color: contact.role.color }}>
           {contact.name[0].toUpperCase()}
         </div>
-        <p className="font-semibold text-gray-900 text-xs text-center leading-tight w-full truncate px-1" title={contact.name}>{contact.name}</p>
-        <span className="text-xs px-1.5 py-0.5 rounded-full font-medium" style={{ color: contact.role.color, backgroundColor: contact.role.bgColor }}>{contact.role.label}</span>
+        <p className="font-semibold text-gray-900 text-xs text-center leading-tight w-full truncate px-1" title={contact.name}>
+          {contact.name}
+        </p>
+        <span className="text-xs px-1.5 py-0.5 rounded-full font-medium"
+          style={{ color: contact.role.color, backgroundColor: contact.role.bgColor }}>
+          {contact.role.label}
+        </span>
         {networkSize > 0 && (
           <span className="text-xs text-gray-400">{networkSize.toLocaleString("pt-BR")} na rede</span>
         )}
       </div>
       <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button onClick={() => onAdd(contact)} title="Adicionar na rede" className="p-1 hover:bg-brand-50 rounded text-brand-400"><UserPlus size={10} /></button>
         <button onClick={() => onEdit(contact.id)} className="p-1 hover:bg-gray-100 rounded text-gray-400"><Edit2 size={10} /></button>
         <button onClick={() => onDelete(contact.id)} className="p-1 hover:bg-red-50 rounded text-red-400"><Trash2 size={10} /></button>
       </div>
@@ -339,10 +553,10 @@ const OrgCard = memo(function OrgCard({ contact, networkSize, onEdit, onDelete }
   );
 });
 
-const OrgNode = memo(function OrgNode({ id, childrenMap, contactMap, sizes, defaultExpanded, onEdit, onDelete }: {
+const OrgNode = memo(function OrgNode({ id, childrenMap, contactMap, sizes, defaultExpanded, onEdit, onDelete, onAdd }: {
   id: string; childrenMap: Map<string, string[]>; contactMap: Map<string, TreeContact>;
   sizes: Map<string, number>; defaultExpanded: boolean;
-  onEdit: (id: string) => void; onDelete: (id: string) => void;
+  onEdit: (id: string) => void; onDelete: (id: string) => void; onAdd: (c: TreeContact) => void;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const contact = contactMap.get(id);
@@ -354,12 +568,10 @@ const OrgNode = memo(function OrgNode({ id, childrenMap, contactMap, sizes, defa
   return (
     <div className="flex flex-col items-center">
       <div className="relative">
-        <OrgCard contact={contact} networkSize={networkSize} onEdit={onEdit} onDelete={onDelete} />
+        <OrgCard contact={contact} networkSize={networkSize} onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} />
         {children.length > 0 && (
-          <button
-            onClick={() => setExpanded(v => !v)}
-            className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-400 hover:text-brand-600 hover:border-brand-300 transition-colors z-10"
-          >
+          <button onClick={() => setExpanded(v => !v)}
+            className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-gray-400 hover:text-brand-600 hover:border-brand-300 transition-colors z-10">
             <ChevronDown size={11} className={`transition-transform duration-200 ${expanded ? "" : "-rotate-180"}`} />
           </button>
         )}
@@ -374,15 +586,8 @@ const OrgNode = memo(function OrgNode({ id, childrenMap, contactMap, sizes, defa
                 {i > 0 && <div className="absolute top-0 left-0 w-1/2 bg-gray-200" style={{ height: 1 }} />}
                 {i < children.length - 1 && <div className="absolute top-0 right-0 w-1/2 bg-gray-200" style={{ height: 1 }} />}
                 <div className="w-px bg-gray-200" style={{ height: 28 }} />
-                <OrgNode
-                  id={childId}
-                  childrenMap={childrenMap}
-                  contactMap={contactMap}
-                  sizes={sizes}
-                  defaultExpanded={contact.role.level < 1}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                />
+                <OrgNode id={childId} childrenMap={childrenMap} contactMap={contactMap} sizes={sizes}
+                  defaultExpanded={contact.role.level < 1} onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} />
               </div>
             ))}
           </div>
@@ -392,12 +597,12 @@ const OrgNode = memo(function OrgNode({ id, childrenMap, contactMap, sizes, defa
   );
 });
 
-function OrgView({ onEditById, onDeleteById }: {
-  onEditById: (id: string) => void; onDeleteById: (id: string) => void;
+function OrgView({ onEditById, onAddWithParent }: {
+  onEditById: (id: string) => void;
+  onAddWithParent: (parent: TreeContact) => void;
 }) {
   const [contacts, setContacts] = useState<TreeContact[]>([]);
   const [loading, setLoading]   = useState(true);
-  // viewport unificado — zoom + pan num único state para evitar closures desatualizadas
   const [vp, setVp] = useState({ zoom: 0.9, x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const lastMouseRef = useRef({ x: 0, y: 0 });
@@ -413,7 +618,6 @@ function OrgView({ onEditById, onDeleteById }: {
 
   useEffect(() => { load(); }, [load]);
 
-  // Scroll = zoom ao cursor (estado unificado resolve closure stale)
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -426,18 +630,13 @@ function OrgView({ onEditById, onDeleteById }: {
       const delta = e.deltaY * factor;
       setVp(prev => {
         const next = Math.min(Math.max(prev.zoom * (1 - delta), 0.1), 4);
-        return {
-          zoom: next,
-          x: mx - (mx - prev.x) * (next / prev.zoom),
-          y: my - (my - prev.y) * (next / prev.zoom),
-        };
+        return { zoom: next, x: mx - (mx - prev.x) * (next / prev.zoom), y: my - (my - prev.y) * (next / prev.zoom) };
       });
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, []);
 
-  // Drag = pan (ignora clicks em botões)
   function onMouseDown(e: React.MouseEvent) {
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest("button")) return;
@@ -451,7 +650,6 @@ function OrgView({ onEditById, onDeleteById }: {
     lastMouseRef.current = { x: e.clientX, y: e.clientY };
     setVp(p => ({ ...p, x: p.x + dx, y: p.y + dy }));
   }
-  function onMouseUp() { setIsDragging(false); }
 
   const { childrenMap, sizes } = buildNetworkSizes(contacts);
   const contactMap = new Map(contacts.map(c => [c.id, c]));
@@ -474,65 +672,38 @@ function OrgView({ onEditById, onDeleteById }: {
   );
 
   return (
-    <div
-      ref={containerRef}
-      className="relative h-full overflow-hidden select-none"
+    <div ref={containerRef} className="relative h-full overflow-hidden select-none"
       style={{ cursor: isDragging ? "grabbing" : "grab", background: "#f8fafc" }}
-      onMouseDown={onMouseDown}
-      onMouseMove={onMouseMove}
-      onMouseUp={onMouseUp}
-      onMouseLeave={onMouseUp}
-    >
-      {/* Grid pontilhado estilo Figma */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          backgroundImage: "radial-gradient(circle, #cbd5e1 1px, transparent 1px)",
-          backgroundSize: `${28 * vp.zoom}px ${28 * vp.zoom}px`,
-          backgroundPosition: `${vp.x % (28 * vp.zoom)}px ${vp.y % (28 * vp.zoom)}px`,
-          opacity: 0.5,
-        }}
-      />
-
-      {/* Canvas — max-content evita que width:100% quebre o flex horizontal */}
-      <div
-        style={{
-          transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.zoom})`,
-          transformOrigin: "0 0",
-          position: "absolute",
-          top: 0, left: 0,
-          width: "max-content",
-          minWidth: "100%",
-          willChange: "transform",
-        }}
-      >
+      onMouseDown={onMouseDown} onMouseMove={onMouseMove}
+      onMouseUp={() => setIsDragging(false)} onMouseLeave={() => setIsDragging(false)}>
+      <div className="absolute inset-0 pointer-events-none" style={{
+        backgroundImage: "radial-gradient(circle, #cbd5e1 1px, transparent 1px)",
+        backgroundSize: `${28 * vp.zoom}px ${28 * vp.zoom}px`,
+        backgroundPosition: `${vp.x % (28 * vp.zoom)}px ${vp.y % (28 * vp.zoom)}px`,
+        opacity: 0.5,
+      }} />
+      <div style={{
+        transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.zoom})`,
+        transformOrigin: "0 0", position: "absolute", top: 0, left: 0,
+        width: "max-content", minWidth: "100%", willChange: "transform",
+      }}>
         <div className="flex gap-20 justify-center pt-10 px-16 pb-20">
           {roots.map(root => (
-            <OrgNode
-              key={root.id}
-              id={root.id}
-              childrenMap={childrenMap}
-              contactMap={contactMap}
-              sizes={sizes}
-              defaultExpanded={true}
-              onEdit={onEditById}
-              onDelete={onDeleteById}
-            />
+            <OrgNode key={root.id} id={root.id} childrenMap={childrenMap} contactMap={contactMap}
+              sizes={sizes} defaultExpanded={true} onEdit={onEditById}
+              onDelete={async (id) => { if (!confirm("Remover?")) return; await fetch(`/api/contacts/${id}`, { method: "DELETE" }); toast.success("Removido"); load(); }}
+              onAdd={onAddWithParent} />
           ))}
         </div>
       </div>
-
-      {/* Controles de zoom */}
       <div className="absolute bottom-4 right-4 flex items-center gap-1 bg-white rounded-xl border border-gray-200 shadow-md p-1.5 pointer-events-auto">
         <button onClick={() => setVp(v => ({ ...v, zoom: Math.min(v.zoom + 0.15, 4) }))} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600"><ZoomIn size={14} /></button>
         <span className="text-xs text-gray-500 w-10 text-center font-mono">{Math.round(vp.zoom * 100)}%</span>
         <button onClick={() => setVp(v => ({ ...v, zoom: Math.max(v.zoom - 0.15, 0.1) }))} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600"><ZoomOut size={14} /></button>
         <div className="w-px h-4 bg-gray-200 mx-0.5" />
-        <button onClick={() => setVp({ zoom: 0.9, x: 0, y: 0 })} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600" title="Resetar"><Maximize2 size={13} /></button>
-        <button onClick={load} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600" title="Recarregar"><RefreshCw size={13} /></button>
+        <button onClick={() => setVp({ zoom: 0.9, x: 0, y: 0 })} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600"><Maximize2 size={13} /></button>
+        <button onClick={load} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-600"><RefreshCw size={13} /></button>
       </div>
-
-      {/* Legenda */}
       <div className="absolute bottom-4 left-4 text-xs text-gray-400 bg-white/90 backdrop-blur-sm rounded-lg px-2.5 py-1.5 border border-gray-100 pointer-events-none">
         Scroll = zoom · Arrastar = mover · {contacts.length.toLocaleString("pt-BR")} pessoas
       </div>
@@ -543,11 +714,10 @@ function OrgView({ onEditById, onDeleteById }: {
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function PessoasPage() {
-  const [allContacts, setAllContacts] = useState<Contact[]>([]);
-  const [roles, setRoles]             = useState<PersonRole[]>([]);
-  const [view, setView]               = useState<"list" | "org">("list");
-  const [modal, setModal]             = useState<"new" | "edit" | null>(null);
-  const [editing, setEditing]         = useState<Contact | null>(null);
+  const [roles, setRoles]         = useState<PersonRole[]>([]);
+  const [view, setView]           = useState<"list" | "org">("list");
+  const [modal, setModal]         = useState(false);
+  const [formInitial, setFormInitial] = useState<FormInitial | undefined>();
   const [totalCount, setTotalCount]   = useState(0);
 
   const loadRoles = useCallback(async () => {
@@ -559,29 +729,22 @@ export default function PessoasPage() {
     const r = await fetch("/api/contacts?limit=1");
     const d = await r.json();
     setTotalCount(d.total ?? 0);
-    if (d.contacts) setAllContacts(d.contacts);
   }, []);
 
   useEffect(() => { loadRoles(); loadCount(); }, [loadRoles, loadCount]);
 
-  async function del(contact: Contact) {
-    if (!confirm(`Remover "${contact.name}"?`)) return;
-    const r = await fetch(`/api/contacts/${contact.id}`, { method: "DELETE" });
-    if (!r.ok) { const d = await r.json(); toast.error(d.error); return; }
-    toast.success("Pessoa removida");
-    loadCount();
+  function openNew() { setFormInitial(undefined); setModal(true); }
+
+  function openWithParent(parent: Contact | TreeContact) {
+    setFormInitial({ parentId: parent.id, _parentName: parent.name });
+    setModal(true);
   }
 
-  async function editById(id: string) {
+  async function openEdit(id: string) {
     const r = await fetch(`/api/contacts/${id}`);
     const c = await r.json();
-    setEditing(c);
-    setModal("edit");
-  }
-
-  async function deleteById(id: string) {
-    const contact = { id, name: "esta pessoa" } as Contact;
-    del(contact);
+    setFormInitial({ ...c, _parentName: c.parent?.name ?? "" });
+    setModal(true);
   }
 
   return (
@@ -600,27 +763,30 @@ export default function PessoasPage() {
               <Network size={15} /> Rede
             </button>
           </div>
-          <button onClick={() => { setEditing(null); setModal("new"); }} className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+          <button onClick={openNew} className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
             <Plus size={16} /> Nova Pessoa
           </button>
         </div>
       </header>
 
       <div className="flex-1 overflow-auto px-6 py-4" style={{ display: view === "list" ? "block" : "none" }}>
-        <ListView roles={roles} onEdit={(c) => { setEditing(c); setModal("edit"); }} onDelete={del} />
+        <ListView
+          roles={roles}
+          onEdit={c => openEdit(c.id)}
+          onQuickAdd={parent => openWithParent(parent)}
+        />
       </div>
 
       <div className="flex-1 overflow-hidden" style={{ display: view === "org" ? "flex" : "none", flexDirection: "column" }}>
-        <OrgView onEditById={editById} onDeleteById={deleteById} />
+        <OrgView onEditById={openEdit} onAddWithParent={openWithParent} />
       </div>
 
-      <Modal open={modal !== null} onClose={() => setModal(null)} title={modal === "edit" ? "Editar Pessoa" : "Nova Pessoa"} size="xl">
+      <Modal open={modal} onClose={() => setModal(false)} title={formInitial?.id ? "Editar Pessoa" : "Nova Pessoa"} size="xl">
         <PersonForm
-          initial={editing ?? undefined}
-          contacts={allContacts}
+          initial={formInitial}
           roles={roles}
-          onSave={() => { setModal(null); loadCount(); }}
-          onClose={() => setModal(null)}
+          onSave={() => { setModal(false); loadCount(); }}
+          onClose={() => setModal(false)}
         />
       </Modal>
     </div>
