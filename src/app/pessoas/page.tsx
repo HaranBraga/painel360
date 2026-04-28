@@ -21,7 +21,7 @@ function PersonForm({ initial, onSave, onClose, contacts, roles }: {
   contacts: Contact[]; roles: PersonRole[];
 }) {
   const [form, setForm] = useState({
-    name: "", phone: "", email: "", roleId: roles[roles.length - 1]?.id ?? "", parentId: "", notes: "",
+    name: "", phone: "", email: "", notes: "",
     ...initial,
     roleId: initial?.roleId ?? roles[roles.length - 1]?.id ?? "",
     parentId: initial?.parentId ?? "",
