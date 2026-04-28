@@ -143,6 +143,11 @@ model Dispatch {
   createdAt DateTime         @default(now())
 }
 
+model AppConfig {
+  key   String @id
+  value String
+}
+
 model DispatchResult {
   id          String   @id @default(cuid())
   dispatchId  String

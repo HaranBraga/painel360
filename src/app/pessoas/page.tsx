@@ -624,23 +624,18 @@ function OrgView({ onEditById, onAddUnder, focusedId }: {
 
   useEffect(() => { load(); }, [load]);
 
-  useEffect(() => {
-    const el = containerRef.current; if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      // Sempre previne o default dentro do canvas para não acionar zoom do browser
-      if (e.ctrlKey || e.metaKey) e.preventDefault();
-      if (!e.ctrlKey && !e.metaKey) return;
-      const rect = el.getBoundingClientRect();
-      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-      const delta = (e.deltaMode === 1 ? 0.05 : 0.001) * e.deltaY;
-      setVp(prev => {
-        const next = Math.min(Math.max(prev.zoom * (1 - delta), 0.1), 4);
-        return { zoom: next, x: mx - (mx - prev.x) * (next / prev.zoom), y: my - (my - prev.y) * (next / prev.zoom) };
-      });
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
+  // Zoom via React onWheel (não-passivo por padrão, e.preventDefault() funciona)
+  function handleWheel(e: React.WheelEvent<HTMLDivElement>) {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    const rect = containerRef.current!.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const delta = (e.deltaMode === 1 ? 0.05 : 0.001) * e.deltaY;
+    setVp(prev => {
+      const next = Math.min(Math.max(prev.zoom * (1 - delta), 0.1), 4);
+      return { zoom: next, x: mx - (mx - prev.x) * (next / prev.zoom), y: my - (my - prev.y) * (next / prev.zoom) };
+    });
+  }
 
   function onMouseDown(e: React.MouseEvent) {
     if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
@@ -669,6 +664,7 @@ function OrgView({ onEditById, onAddUnder, focusedId }: {
   return (
     <div ref={containerRef} className="relative h-full overflow-hidden select-none"
       style={{ cursor: isDragging ? "grabbing" : "grab", background: "#1e293b" }}
+      onWheel={handleWheel}
       onMouseDown={onMouseDown} onMouseMove={onMouseMove}
       onMouseUp={() => setIsDragging(false)} onMouseLeave={() => setIsDragging(false)}>
       <div className="absolute inset-0 pointer-events-none" style={{

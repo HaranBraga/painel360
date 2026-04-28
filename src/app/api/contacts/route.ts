@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   const [contacts, total] = await Promise.all([
     prisma.contact.findMany({
       where,
-      include: { role: roleSelect, parent: { select: { id: true, name: true, role: roleSelect } }, _count: { select: { children: true } } },
+      include: { role: roleSelect, parent: { select: { id: true, name: true, score: true, role: roleSelect } }, _count: { select: { children: true } } },
       orderBy: [{ role: { level: "asc" } }, { name: "asc" }],
       skip: (page - 1) * limit,
       take: limit,
