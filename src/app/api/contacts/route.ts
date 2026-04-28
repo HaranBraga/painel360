@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
     prisma.contact.findMany({
       where,
       include: { role: roleSelect, parent: { select: { id: true, name: true, score: true, role: roleSelect } }, _count: { select: { children: true } } },
+      // score1,score2,score3 são colunas diretas — incluídos automaticamente no select
       orderBy: [{ role: { level: "asc" } }, { name: "asc" }],
       skip: (page - 1) * limit,
       take: limit,

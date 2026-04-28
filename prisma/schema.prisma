@@ -49,7 +49,10 @@ model Contact {
   cidade          String?
   zona            String?
 
-  score           Float?
+  score           Float?   // média computada automaticamente
+  score1          Float?   // avaliador 1
+  score2          Float?   // avaliador 2
+  score3          Float?   // avaliador 3
   scoreNote       String?
 
   lastContactAt   DateTime?
