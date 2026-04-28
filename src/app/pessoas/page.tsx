@@ -40,7 +40,7 @@ function PersonForm({ initial, onSave, onClose, contacts, roles }: {
   contacts: Contact[]; roles: PersonRole[];
 }) {
   const [form, setForm] = useState({
-    name: "", email: "", notes: "", genero: "", rua: "", bairro: "", cidade: "", zona: "", dataNascimento: "",
+    name: "", email: "", notes: "", genero: "", rua: "", bairro: "", cidade: "", zona: "",
     ...initial,
     phone: initial?.phone ? stripBR(initial.phone) : "",
     roleId: initial?.roleId ?? roles[roles.length - 1]?.id ?? "",
