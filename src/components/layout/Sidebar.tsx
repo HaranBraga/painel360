@@ -1,12 +1,13 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Users, Settings, Grid3X3, Star } from "lucide-react";
+import { Users, Settings, Grid3X3, Star, BarChart3 } from "lucide-react";
 
 const nav = [
-  { href: "/pessoas",       label: "Pessoas",        icon: Users },
-  { href: "/score",         label: "Score",           icon: Star },
-  { href: "/configuracoes", label: "Configurações",   icon: Settings },
+  { href: "/pessoas",       label: "Pessoas",        icon: Users     },
+  { href: "/score",         label: "Score",          icon: Star      },
+  { href: "/relatorios",    label: "Relatórios",     icon: BarChart3 },
+  { href: "/configuracoes", label: "Configurações",  icon: Settings  },
 ];
 
 export function Sidebar() {

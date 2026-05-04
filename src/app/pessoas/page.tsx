@@ -1,12 +1,57 @@
 "use client";
 import { useState, useEffect, useCallback, useRef, memo } from "react";
+import Link from "next/link";
 import {
   Plus, Search, ChevronRight, Trash2, Edit2, List, Network,
-  Users, ChevronDown, ZoomIn, ZoomOut, Maximize2, RefreshCw, X, UserPlus,
+  Users, ChevronDown, ZoomIn, ZoomOut, Maximize2, RefreshCw, X, UserPlus, Filter,
 } from "lucide-react";
 import { RoleBadge, type PersonRole } from "@/components/ui/RoleBadge";
 import { Modal } from "@/components/ui/Modal";
 import toast from "react-hot-toast";
+
+// ─── Filtro multi-select estilo Excel ────────────────────────────────────────
+
+function FilterPicker({ label, options, selected, onChange, placeholder }: {
+  label: string;
+  options: { value: string; label: string; count?: number }[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  placeholder?: string;
+}) {
+  const [q, setQ] = useState("");
+  const filtered = options.filter(o => !q.trim() || o.label.toLowerCase().includes(q.toLowerCase()));
+  const toggle = (v: string) => onChange(selected.includes(v) ? selected.filter(s => s !== v) : [...selected, v]);
+
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50">
+        <span className="text-[11px] font-semibold text-gray-600 uppercase">{label}</span>
+        {selected.length > 0 && (
+          <button onClick={() => onChange([])} className="ml-auto text-[10px] text-red-400 hover:text-red-600">limpar ({selected.length})</button>
+        )}
+      </div>
+      {options.length > 8 && (
+        <div className="px-2 py-1.5 border-b border-gray-100">
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={placeholder ?? "Filtrar..."}
+            className="w-full text-xs px-2 py-1 bg-transparent focus:outline-none" />
+        </div>
+      )}
+      <div className="max-h-44 overflow-y-auto">
+        {filtered.length === 0 && <p className="px-3 py-2 text-xs text-gray-400">Nada</p>}
+        {filtered.slice(0, 200).map(o => {
+          const on = selected.includes(o.value);
+          return (
+            <label key={o.value} className="flex items-center gap-2 px-3 py-1.5 text-xs cursor-pointer hover:bg-gray-50">
+              <input type="checkbox" checked={on} onChange={() => toggle(o.value)} className="rounded border-gray-300 text-brand-600 focus:ring-brand-500" />
+              <span className="flex-1 text-gray-700 truncate">{o.label}</span>
+              {o.count !== undefined && <span className="text-[10px] text-gray-400">{o.count}</span>}
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -322,6 +367,17 @@ function ListView({ roles, onEdit, onAddUnder, onShowNetwork }: {
   const [roleFilter, setRoleFilter] = useState("");
   const [loading, setLoading]       = useState(false);
 
+  // Filtros multi (estilo Excel)
+  const [showFilters, setShowFilters] = useState(false);
+  const [opts, setOpts] = useState<any | null>(null);
+  const [leaders, setLeaders] = useState<any[]>([]);
+  const [labelDefs, setLabelDefs] = useState<any[]>([]);
+  const [roleKeys, setRoleKeys] = useState<string[]>([]);
+  const [cidades, setCidades]   = useState<string[]>([]);
+  const [bairros, setBairros]   = useState<string[]>([]);
+  const [labelsFilter, setLabelsFilter] = useState<string[]>([]);
+  const [liderIds, setLiderIds] = useState<string[]>([]);
+
   const [netSearch, setNetSearch]         = useState("");
   const [netResults, setNetResults]       = useState<Contact[]>([]);
   const [netOpen, setNetOpen]             = useState(false);
@@ -339,12 +395,17 @@ function ListView({ roles, onEdit, onAddUnder, onShowNetwork }: {
     });
   }, [networkRoot]);
 
-  const load = useCallback(async (p = 1, q = search, r = roleFilter) => {
+  const load = useCallback(async (p = 1) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(p), limit: "50" });
-      if (q) params.set("search", q);
-      if (r) params.set("roleId", r);
+      if (search) params.set("search", search);
+      if (roleFilter) params.set("roleId", roleFilter);
+      if (roleKeys.length) params.set("roleKeys", roleKeys.join(","));
+      if (cidades.length)  params.set("cidades", cidades.join(","));
+      if (bairros.length)  params.set("bairros", bairros.join(","));
+      if (labelsFilter.length) params.set("labels", labelsFilter.join(","));
+      if (liderIds.length) params.set("liderIds", liderIds.join(","));
       const res = await fetch(`/api/contacts?${params}`);
       const data = await res.json();
       setContacts(data.contacts ?? []);
@@ -352,14 +413,30 @@ function ListView({ roles, onEdit, onAddUnder, onShowNetwork }: {
       setPage(data.page ?? 1);
       setPages(data.pages ?? 1);
     } finally { setLoading(false); }
-  }, [search, roleFilter]);
+  }, [search, roleFilter, roleKeys, cidades, bairros, labelsFilter, liderIds]);
 
-  useEffect(() => { load(1); }, []);
+  useEffect(() => {
+    fetch("/api/contacts/filter-options").then(r => r.json()).then(setOpts).catch(() => {});
+    fetch("/api/labels").then(r => r.json()).then(setLabelDefs).catch(() => setLabelDefs([]));
+  }, []);
 
-  function onSearchInput(v: string) {
-    setSearch(v);
+  // Recarrega quando filtros multi mudam (debounced no search)
+  useEffect(() => {
     clearTimeout(searchDebounce.current);
-    searchDebounce.current = setTimeout(() => load(1, v, roleFilter), 400);
+    searchDebounce.current = setTimeout(() => load(1), 250);
+    return () => clearTimeout(searchDebounce.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, roleFilter, roleKeys, cidades, bairros, labelsFilter, liderIds]);
+
+  useEffect(() => {
+    if (showFilters && leaders.length === 0) {
+      fetch("/api/contacts/leaders?limit=200").then(r => r.json()).then(setLeaders).catch(() => {});
+    }
+  }, [showFilters, leaders.length]);
+
+  const activeMultiCount = roleKeys.length + cidades.length + bairros.length + labelsFilter.length + liderIds.length;
+  function clearAllMulti() {
+    setRoleKeys([]); setCidades([]); setBairros([]); setLabelsFilter([]); setLiderIds([]);
   }
 
   function searchNetwork(q: string) {
@@ -394,16 +471,41 @@ function ListView({ roles, onEdit, onAddUnder, onShowNetwork }: {
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-48">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input value={search} onChange={e => onSearchInput(e.target.value)} placeholder="Buscar por nome..."
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nome..."
             className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500" />
         </div>
-        <select value={roleFilter} onChange={e => { setRoleFilter(e.target.value); load(1, search, e.target.value); }}
+        <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
           className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500">
           <option value="">Todos os cargos</option>
           {roles.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
         </select>
+        <button onClick={() => setShowFilters(s => !s)}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${activeMultiCount > 0 ? "bg-brand-50 border-brand-300 text-brand-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+          <Filter size={14} /> Filtros
+          {activeMultiCount > 0 && <span className="bg-brand-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">{activeMultiCount}</span>}
+        </button>
+        {activeMultiCount > 0 && (
+          <button onClick={clearAllMulti} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
+            <X size={12} /> Limpar
+          </button>
+        )}
         <span className="text-xs text-gray-400">{total.toLocaleString("pt-BR")} pessoas</span>
       </div>
+
+      {showFilters && (
+        <div className="bg-white border border-gray-200 rounded-xl p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <FilterPicker label="Papéis" options={(opts?.roles ?? []).map((r: any) => ({ value: r.key, label: r.label, count: r.count }))}
+            selected={roleKeys} onChange={setRoleKeys} />
+          <FilterPicker label="Líderes (rede direta)" options={leaders.map((l: any) => ({ value: l.id, label: l.name, count: l.childCount }))}
+            selected={liderIds} onChange={setLiderIds} placeholder="Buscar líder..." />
+          <FilterPicker label="Cidades" options={(opts?.cidades ?? []).map((c: any) => ({ value: c.value, label: c.value, count: c.count }))}
+            selected={cidades} onChange={setCidades} />
+          <FilterPicker label="Bairros" options={(opts?.bairros ?? []).map((b: any) => ({ value: b.value, label: b.value, count: b.count }))}
+            selected={bairros} onChange={setBairros} />
+          <FilterPicker label="Etiquetas" options={labelDefs.map((l: any) => ({ value: l.name, label: l.name }))}
+            selected={labelsFilter} onChange={setLabelsFilter} />
+        </div>
+      )}
 
       {/* Filtro de rede */}
       <div className="bg-white border border-gray-200 rounded-xl p-3">
@@ -480,17 +582,16 @@ function ListView({ roles, onEdit, onAddUnder, onShowNetwork }: {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p
+                      <Link href={`/pessoas/${c.id}`}
                         className="font-medium text-gray-900 text-sm cursor-pointer hover:text-brand-600 hover:underline"
-                        title="Duplo clique para ver a rede"
-                        onDoubleClick={() => onShowNetwork(c)}
-                      >{c.name}</p>
+                        title="Abrir ficha 360"
+                      >{c.name}</Link>
                       {c.parent && <span className="text-xs text-gray-400 flex items-center gap-0.5"><ChevronRight size={10} />{c.parent.name}</span>}
                       {c.cidade && <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{c.cidade}</span>}
                       {c.zona   && <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{c.zona}</span>}
                     </div>
                     {c._count && c._count.children > 0 && (
-                      <p className="text-xs text-gray-400 mt-0.5">{c._count.children} na rede</p>
+                      <button onClick={() => onShowNetwork(c)} className="text-xs text-gray-400 hover:text-brand-600 mt-0.5 underline-offset-2 hover:underline">{c._count.children} na rede</button>
                     )}
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

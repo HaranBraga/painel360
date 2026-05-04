@@ -25,7 +25,7 @@ function avgScores(s1: number | null, s2: number | null, s3: number | null): num
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const body = await req.json();
-  const { name, phone, email, roleId, parentId, notes, dataNascimento, genero, rua, bairro, cidade, zona, score1, score2, score3, scoreNote } = body;
+  const { name, phone, email, roleId, parentId, notes, dataNascimento, genero, rua, bairro, cidade, zona, score1, score2, score3, scoreNote, labels, customFields } = body;
 
   const isScoreUpdate = score1 !== undefined || score2 !== undefined || score3 !== undefined;
 
@@ -64,6 +64,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       ...(score3 !== undefined && { score3: score3 !== null ? parseFloat(String(score3)) : null }),
       ...(computedScore !== undefined && { score: computedScore }),
       ...(scoreNote !== undefined && { scoreNote }),
+      ...(labels    !== undefined && { labels: Array.isArray(labels) ? labels : [] }),
+      ...(customFields !== undefined && { customFields: customFields && typeof customFields === "object" ? customFields : null }),
     },
     include: { role: roleSelect },
   });

@@ -26,4 +26,9 @@ COPY --from=builder /app/scripts ./scripts
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node scripts/startup.js && npx next start -p 3000"]
+# ATENÇÃO: NÃO use --accept-data-loss aqui. Causou perda de dados em deploy
+# anterior porque o painel-360 e o conect-crm compartilham banco; quando o
+# schema deste deploy estiver "atrás" do schema do outro app, o flag
+# autoriza dropar tabelas inteiras silenciosamente. Sem o flag, o deploy
+# FALHA explicitamente — admin investiga antes de qualquer perda.
+CMD ["sh", "-c", "npx prisma db push && node scripts/startup.js && npx next start -p 3000"]

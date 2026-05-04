@@ -5,6 +5,11 @@ export const dynamic = "force-dynamic";
 
 const roleSelect = { select: { id: true, key: true, label: true, color: true, bgColor: true, level: true } };
 
+function multi(s: string | null): string[] {
+  if (!s) return [];
+  return s.split(",").map(x => x.trim()).filter(Boolean);
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const search  = searchParams.get("search") ?? "";
@@ -14,20 +19,35 @@ export async function GET(req: NextRequest) {
   const page    = Math.max(1, parseInt(searchParams.get("page")  ?? "1"));
   const limit   = Math.min(100, parseInt(searchParams.get("limit") ?? "50"));
 
+  // Filtros multi (Excel-like)
+  const roleKeys = multi(searchParams.get("roleKeys"));
+  const cidades  = multi(searchParams.get("cidades"));
+  const bairros  = multi(searchParams.get("bairros"));
+  const labels   = multi(searchParams.get("labels"));
+  const liderIds = multi(searchParams.get("liderIds"));
+
   const where: any = {
     AND: [
       search ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { phone: { contains: search } }] } : {},
       roleId ? { roleId } : {},
       cidade ? { cidade: { contains: cidade, mode: "insensitive" } } : {},
       zona   ? { zona:   { contains: zona,   mode: "insensitive" } } : {},
+      roleKeys.length ? { role: { key: { in: roleKeys } } } : {},
+      cidades.length  ? { cidade: { in: cidades } } : {},
+      bairros.length  ? { bairro: { in: bairros } } : {},
+      labels.length   ? { labels: { hasSome: labels } } : {},
+      liderIds.length ? { parentId: { in: liderIds } } : {},
     ],
   };
 
   const [contacts, total] = await Promise.all([
     prisma.contact.findMany({
       where,
-      include: { role: roleSelect, parent: { select: { id: true, name: true, score: true, role: roleSelect } }, _count: { select: { children: true } } },
-      // score1,score2,score3 são colunas diretas — incluídos automaticamente no select
+      include: {
+        role: roleSelect,
+        parent: { select: { id: true, name: true, score: true, role: roleSelect } },
+        _count: { select: { children: true } },
+      },
       orderBy: [{ role: { level: "asc" } }, { name: "asc" }],
       skip: (page - 1) * limit,
       take: limit,
@@ -40,7 +60,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { name, phone, email, roleId, parentId, notes, dataNascimento, genero, rua, bairro, cidade, zona } = body;
+  const { name, phone, email, roleId, parentId, notes, dataNascimento, genero, rua, bairro, cidade, zona, customFields } = body;
 
   if (!name || !phone) return NextResponse.json({ error: "Nome e telefone são obrigatórios" }, { status: 400 });
 
@@ -56,6 +76,7 @@ export async function POST(req: NextRequest) {
       notes, source: "manual",
       dataNascimento: dataNascimento ? new Date(dataNascimento) : null,
       genero, rua, bairro, cidade, zona,
+      customFields: customFields && typeof customFields === "object" ? customFields : undefined,
     },
     include: { role: roleSelect },
   });
