@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import {
   Users, MessageSquare, ClipboardList, UsersRound, Megaphone, TrendingUp,
 } from "lucide-react";
+import { RelatoriosTabs } from "@/components/layout/RelatoriosTabs";
 
 type Summary = {
   contatos: { total: number; novos7: number; novos30: number; porPapel: any[] };
@@ -41,9 +42,12 @@ export default function RelatoriosPage() {
 
   return (
     <div className="flex flex-col h-screen">
-      <header className="px-6 py-4 bg-white border-b border-gray-200">
-        <h1 className="text-xl font-bold text-gray-900">Relatórios</h1>
-        <p className="text-sm text-gray-500">Visão geral em números</p>
+      <header className="bg-white border-b border-gray-200">
+        <div className="px-6 py-4">
+          <h1 className="text-xl font-bold text-gray-900">Relatórios</h1>
+          <p className="text-sm text-gray-500">Visão geral em números</p>
+        </div>
+        <RelatoriosTabs />
       </header>
 
       <div className="flex-1 overflow-y-auto p-6 bg-gray-50">

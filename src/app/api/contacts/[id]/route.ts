@@ -11,6 +11,11 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
     include: {
       role: roleSelect,
       parent: { select: { id: true, name: true, score: true, role: roleSelect } },
+      children: {
+        select: { id: true, name: true, phone: true, score: true, cidade: true, bairro: true, role: roleSelect, _count: { select: { children: true } } },
+        orderBy: [{ role: { level: "asc" } }, { name: "asc" }],
+      },
+      _count: { select: { children: true } },
     },
   });
   if (!contact) return NextResponse.json({ error: "Pessoa não encontrada" }, { status: 404 });

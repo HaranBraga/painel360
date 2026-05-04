@@ -409,33 +409,63 @@ function TabNotas({ contactId }: { contactId: string }) {
 }
 
 function TabRede({ contact }: { contact: any }) {
-  const childCount = contact._count?.children ?? 0;
+  const children: any[] = contact.children ?? [];
+  const childCount = contact._count?.children ?? children.length;
   return (
-    <div className="max-w-3xl mx-auto">
-      <section className="bg-white border border-gray-200 rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">Rede direta</h3>
-        {contact.parent && (
-          <div className="mb-4">
-            <p className="text-[11px] uppercase font-semibold text-gray-400 mb-1">Líder direto</p>
-            <Link href={`/pessoas/${contact.parent.id}`}
-              className="inline-flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm hover:bg-indigo-100">
-              <UserIcon size={14} /> {contact.parent.name}
-              {contact.parent.role && <RoleBadge role={contact.parent.role} />}
-            </Link>
-          </div>
-        )}
+    <div className="max-w-3xl mx-auto flex flex-col gap-4">
+      {contact.parent && (
+        <section className="bg-white border border-gray-200 rounded-xl p-5">
+          <p className="text-[11px] uppercase font-semibold text-gray-400 mb-2">Líder direto</p>
+          <Link href={`/pessoas/${contact.parent.id}`}
+            className="inline-flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-lg text-sm hover:bg-indigo-100">
+            <UserIcon size={14} /> {contact.parent.name}
+            {contact.parent.role && <RoleBadge role={contact.parent.role} />}
+          </Link>
+        </section>
+      )}
 
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-[11px] uppercase font-semibold text-gray-400">Filhos diretos</p>
-          <span className="text-xs text-gray-400">{childCount}</span>
+      <section className="bg-white border border-gray-200 rounded-xl p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-700">Rede direta abaixo</h3>
+          <span className="text-xs text-gray-400">{childCount} pessoa(s)</span>
         </div>
+
         {childCount === 0 ? (
           <p className="text-xs text-gray-400 italic">Nenhum contato diretamente abaixo</p>
         ) : (
-          <Link href={`/pessoas?liderIds=${contact.id}`}
-            className="block w-full text-center px-4 py-2 bg-gray-50 hover:bg-gray-100 text-sm text-gray-700 rounded-lg">
-            Ver os {childCount} contatos abaixo →
-          </Link>
+          <>
+            <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg">
+              {children.map(c => (
+                <Link key={c.id} href={`/pessoas/${c.id}`}
+                  className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center font-semibold text-xs shrink-0"
+                    style={{ backgroundColor: c.role?.bgColor ?? "#eef2ff", color: c.role?.color ?? "#6366f1" }}>
+                    {c.name?.[0]?.toUpperCase() ?? "?"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-medium text-gray-900 truncate">{c.name}</p>
+                      {c.role && <RoleBadge role={c.role} />}
+                      {typeof c.score === "number" && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-0.5">
+                          <Star size={9} /> {c.score.toFixed(1)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-gray-400 mt-0.5">
+                      {c.phone && <span>{c.phone}</span>}
+                      {c.cidade && <span>· {c.cidade}{c.bairro ? ` / ${c.bairro}` : ""}</span>}
+                      {c._count?.children > 0 && <span>· {c._count.children} na rede</span>}
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+            <Link href={`/pessoas?liderIds=${contact.id}`}
+              className="block w-full text-center px-4 py-2 mt-3 bg-gray-50 hover:bg-gray-100 text-sm text-gray-700 rounded-lg">
+              Abrir lista completa filtrada →
+            </Link>
+          </>
         )}
       </section>
     </div>

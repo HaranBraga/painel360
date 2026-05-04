@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   const cidade  = searchParams.get("cidade")  ?? undefined;
   const zona    = searchParams.get("zona")    ?? undefined;
   const page    = Math.max(1, parseInt(searchParams.get("page")  ?? "1"));
-  const limit   = Math.min(100, parseInt(searchParams.get("limit") ?? "50"));
+  const limit   = Math.min(2000, parseInt(searchParams.get("limit") ?? "50"));
 
   // Filtros multi (Excel-like)
   const roleKeys = multi(searchParams.get("roleKeys"));
