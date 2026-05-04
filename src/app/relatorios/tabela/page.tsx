@@ -239,9 +239,9 @@ export default function RelatoriosTabelaPage() {
                     key={c.key} col={c} rows={rows} sort={sort}
                     activeFilter={colFilters[c.key] ?? []}
                     onSort={() => toggleSort(c.key)}
-                    onFilter={(v) => setColFilters(p => ({ ...p, [c.key]: v }))}
+                    onFilter={(v: string[]) => setColFilters(p => ({ ...p, [c.key]: v }))}
                     open={openFilter === c.key}
-                    setOpen={(o) => setOpenFilter(o ? c.key : null)}
+                    setOpen={(o: boolean) => setOpenFilter(o ? c.key : null)}
                   />
                 ))}
               </tr>
