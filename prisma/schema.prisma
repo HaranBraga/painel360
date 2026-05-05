@@ -129,6 +129,7 @@ model Conversation {
   lastMessageAt   DateTime?
   lastMessageText String?
   closedAt        DateTime?
+  position        Int          @default(0)
   messages        Message[]
   demandas        Demanda[]
   reuniaoId       String?
@@ -138,6 +139,7 @@ model Conversation {
   updatedAt DateTime @updatedAt
 
   @@unique([contactId])
+  @@index([statusId, position])
 }
 
 model Message {
