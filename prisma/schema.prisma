@@ -75,6 +75,7 @@ model Contact {
 
   customFields    Json?                                // valores dos campos personalizados
   contactNotes    ContactNote[]
+  birthdayMessages BirthdayMessage[]
 
   conversations Conversation[]
   groupMembers  GroupMember[]
@@ -456,4 +457,16 @@ model ContactCustomField {
   updatedAt DateTime @updatedAt
 
   @@index([position])
+}
+
+model BirthdayMessage {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  year      Int
+  message   String
+  sentAt    DateTime @default(now())
+
+  @@unique([contactId, year])
+  @@index([sentAt])
 }
