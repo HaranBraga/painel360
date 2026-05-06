@@ -46,11 +46,14 @@ model Contact {
   name            String
   phone           String     @unique
   email           String?
+  // Slug público usado no minha-rede pra montar URLs tipo /?lider=mario.
+  publicSlug      String?    @unique
   roleId          String
   role            PersonRole @relation(fields: [roleId], references: [id])
   parentId        String?
   parent          Contact?   @relation("Hierarchy", fields: [parentId], references: [id])
   children        Contact[]  @relation("Hierarchy")
+  user            User?
 
   dataNascimento  DateTime?
   genero          String?
@@ -203,6 +206,10 @@ model User {
   lastLogin DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+
+  // Vínculo opcional a um Contact — usado no minha-rede.
+  contactId String?  @unique
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
 
   contactNotes ContactNote[]
   auditLogs    AuditLog[]
