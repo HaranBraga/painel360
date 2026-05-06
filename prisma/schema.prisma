@@ -205,8 +205,33 @@ model User {
   updatedAt DateTime  @updatedAt
 
   contactNotes ContactNote[]
+  auditLogs    AuditLog[]
 
   @@index([username])
+}
+
+/**
+ * Log de auditoria — espelhado do conect-crm (schema compartilhado).
+ * Painel-360 não grava; apenas mantém a tabela em sincronia.
+ */
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  userName  String?
+  action    String
+  entity    String?
+  entityId  String?
+  summary   String?
+  meta      Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([entity, entityId])
+  @@index([createdAt])
 }
 
 model Demanda {
