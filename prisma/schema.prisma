@@ -210,10 +210,8 @@ model User {
   @@index([username])
 }
 
-/**
- * Log de auditoria — espelhado do conect-crm (schema compartilhado).
- * Painel-360 não grava; apenas mantém a tabela em sincronia.
- */
+// Log de auditoria — espelhado do conect-crm (schema compartilhado).
+// Painel-360 não grava; apenas mantém a tabela em sincronia.
 model AuditLog {
   id        String   @id @default(cuid())
   userId    String?
