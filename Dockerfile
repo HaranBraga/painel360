@@ -31,4 +31,4 @@ EXPOSE 3000
 # schema deste deploy estiver "atrás" do schema do outro app, o flag
 # autoriza dropar tabelas inteiras silenciosamente. Sem o flag, o deploy
 # FALHA explicitamente — admin investiga antes de qualquer perda.
-CMD ["sh", "-c", "npx prisma db push && node scripts/startup.js && npx next start -p 3000"]
+CMD ["sh", "-c", "npx prisma db execute --file ./prisma/migrate-shared.sql --schema ./prisma/schema.prisma && npx prisma db push && node scripts/startup.js && npx next start -p 3000"]
