@@ -79,6 +79,7 @@ model Contact {
   customFields    Json?                                // valores dos campos personalizados
   contactNotes    ContactNote[]
   birthdayMessages BirthdayMessage[]
+  redeLoginLogs   RedeLoginLog[]
 
   conversations Conversation[]
   groupMembers  GroupMember[]
@@ -215,6 +216,23 @@ model User {
   auditLogs    AuditLog[]
 
   @@index([username])
+}
+
+// Log de logins do minha-rede (3º front). Espelhado pra manter schema
+// em sincronia. Painel-360 só lê (pra dashboards futuros se quisermos).
+model RedeLoginLog {
+  id        String   @id @default(cuid())
+  type      String
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  actorName String
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([contactId, createdAt])
+  @@index([createdAt])
+  @@index([type, createdAt])
 }
 
 // Log de auditoria — espelhado do conect-crm (schema compartilhado).
