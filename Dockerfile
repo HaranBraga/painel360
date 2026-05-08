@@ -15,6 +15,8 @@ FROM node:20-alpine AS runner
 RUN apk add --no-cache openssl
 WORKDIR /app
 ENV NODE_ENV=production
+# Silencia aviso do Prisma sobre nova versão (upgrade major exige plano).
+ENV CHECKPOINT_DISABLE=1
 
 RUN mkdir -p public
 COPY --from=builder /app/public ./public
