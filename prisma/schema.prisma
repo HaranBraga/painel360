@@ -48,6 +48,9 @@ model Contact {
   email           String?
   // Slug público usado no minha-rede pra montar URLs tipo /?lider=mario.
   publicSlug      String?    @unique
+  // Consentimento LGPD do apoiador no formulário público (data + IP)
+  lgpdConsentAt   DateTime?
+  lgpdIpAddress   String?
   roleId          String
   role            PersonRole @relation(fields: [roleId], references: [id])
   parentId        String?
@@ -80,6 +83,7 @@ model Contact {
   contactNotes    ContactNote[]
   birthdayMessages BirthdayMessage[]
   redeLoginLogs   RedeLoginLog[]
+  redeUser        RedeUser?
 
   conversations Conversation[]
   groupMembers  GroupMember[]
@@ -214,6 +218,21 @@ model User {
 
   contactNotes ContactNote[]
   auditLogs    AuditLog[]
+
+  @@index([username])
+}
+
+// Login do minha-rede (espelhado do conect-crm). Painel-360 só lê.
+model RedeUser {
+  id        String   @id @default(cuid())
+  contactId String   @unique
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  username  String   @unique
+  password  String
+  active    Boolean  @default(true)
+  lastLogin DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([username])
 }
