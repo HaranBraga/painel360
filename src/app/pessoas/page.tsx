@@ -69,7 +69,12 @@ interface TreeContact {
 }
 
 function withBR(p: string) { const d = p.replace(/\D/g, ""); return d.startsWith("55") ? d : `55${d}`; }
-function stripBR(p: string) { const d = p.replace(/\D/g, ""); return d.startsWith("55") ? d.slice(2) : d; }
+function stripBR(p: string) {
+  if (!p) return "";
+  if (p.startsWith("placeholder") || p.startsWith("cleared-") || p.startsWith("import-") || p.startsWith("temp-")) return "";
+  const d = p.replace(/\D/g, "");
+  return d.startsWith("55") ? d.slice(2) : d;
+}
 
 // ─── Busca de responsável (autocomplete) ──────────────────────────────────────
 

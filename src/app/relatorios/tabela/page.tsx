@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { RelatoriosTabs } from "@/components/layout/RelatoriosTabs";
 import { RoleBadge } from "@/components/ui/RoleBadge";
+import { displayPhone } from "@/lib/phone-display";
 import toast from "react-hot-toast";
 
 type Col = {
@@ -26,7 +27,7 @@ const baseCols: Col[] = [
   { key: "role",       label: "Papel",     type: "badge", filterable: true, get: r => r.role?.label,
     render: (_, r) => r.role ? <RoleBadge role={r.role} /> : "—" },
   { key: "lider",      label: "Líder",     type: "text",  filterable: true, get: r => r.parent?.name ?? "" },
-  { key: "phone",      label: "Telefone",  type: "text",  filterable: false, get: r => r.phone },
+  { key: "phone",      label: "Telefone",  type: "text",  filterable: false, get: r => displayPhone(r.phone) ?? "" },
   { key: "cidade",     label: "Cidade",    type: "text",  filterable: true, get: r => r.cidade ?? "" },
   { key: "bairro",     label: "Bairro",    type: "text",  filterable: true, get: r => r.bairro ?? "" },
   { key: "zona",       label: "Zona",      type: "text",  filterable: true, get: r => r.zona ?? "" },
@@ -96,7 +97,7 @@ export default function RelatoriosTabelaPage() {
     if (search.trim()) {
       const q = search.toLowerCase();
       result = result.filter(r => {
-        return [r.name, r.phone, r.email, r.cidade, r.bairro, r.parent?.name, r.role?.label]
+        return [r.name, displayPhone(r.phone), r.email, r.cidade, r.bairro, r.parent?.name, r.role?.label]
           .filter(Boolean)
           .some((v: any) => String(v).toLowerCase().includes(q));
       });

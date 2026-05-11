@@ -237,6 +237,22 @@ model RedeUser {
   @@index([username])
 }
 
+// Usuários admin do minha-rede. Espelhado aqui pra manter schema em sincronia
+// — o painel-360 não usa essa tabela diretamente.
+model RedeAdminUser {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  password     String
+  name         String
+  isSuperAdmin Boolean  @default(false)
+  active       Boolean  @default(true)
+  lastLogin    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([username])
+}
+
 // Log de logins do minha-rede (3º front). Espelhado pra manter schema
 // em sincronia. Painel-360 só lê (pra dashboards futuros se quisermos).
 model RedeLoginLog {

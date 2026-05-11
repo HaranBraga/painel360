@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { upperOrNull } from "@/lib/contact-normalize";
 
 export const dynamic = "force-dynamic";
 
@@ -72,10 +73,16 @@ export async function POST(req: NextRequest) {
 
   const contact = await prisma.contact.create({
     data: {
-      name, phone, email, roleId: resolvedRoleId, parentId: parentId ?? null,
+      name: String(name).trim().toUpperCase(),
+      phone, email,
+      roleId: resolvedRoleId, parentId: parentId ?? null,
       notes, source: "manual",
       dataNascimento: dataNascimento ? new Date(dataNascimento) : null,
-      genero, rua, bairro, cidade, zona,
+      genero: upperOrNull(genero),
+      rua: upperOrNull(rua),
+      bairro: upperOrNull(bairro),
+      cidade: upperOrNull(cidade),
+      zona: upperOrNull(zona),
       customFields: customFields && typeof customFields === "object" ? customFields : undefined,
     },
     include: { role: roleSelect },

@@ -10,6 +10,7 @@ import {
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { RoleBadge } from "@/components/ui/RoleBadge";
+import { displayPhone, displayPhoneOrEmpty } from "@/lib/phone-display";
 import toast from "react-hot-toast";
 
 type Tab = "geral" | "timeline" | "notas" | "rede";
@@ -83,7 +84,9 @@ export default function PessoaDetailPage() {
               )}
             </div>
             <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5 flex-wrap">
-              <span className="flex items-center gap-1"><Phone size={11} />{contact.phone}</span>
+              {displayPhone(contact.phone) && (
+                <span className="flex items-center gap-1"><Phone size={11} />{displayPhone(contact.phone)}</span>
+              )}
               {contact.cidade && <span className="flex items-center gap-1"><MapPin size={11} />{contact.cidade}{contact.bairro ? ` · ${contact.bairro}` : ""}</span>}
               {contact.lastContactAt && (
                 <span className="text-gray-400">Últ. contato {formatDistanceToNow(new Date(contact.lastContactAt), { addSuffix: true, locale: ptBR })}</span>
@@ -120,7 +123,7 @@ function TabGeral({ contact, customFields, roles, onSaved }: any) {
   const [edit, setEdit] = useState(false);
   const [form, setForm] = useState<any>(() => ({
     name: contact.name,
-    phone: contact.phone,
+    phone: displayPhoneOrEmpty(contact.phone),
     email: contact.email ?? "",
     roleId: contact.roleId,
     parentId: contact.parentId ?? "",
@@ -172,7 +175,7 @@ function TabGeral({ contact, customFields, roles, onSaved }: any) {
 
         <div className="grid grid-cols-2 gap-3 text-sm">
           <Field label="Nome" edit={edit} value={form.name} onChange={(v: string) => setF("name", v)} display={contact.name} />
-          <Field label="Telefone" edit={edit} value={form.phone} onChange={(v: string) => setF("phone", v)} display={contact.phone} />
+          <Field label="Telefone" edit={edit} value={form.phone} onChange={(v: string) => setF("phone", v)} display={displayPhoneOrEmpty(contact.phone) || "—"} />
           <Field label="E-mail" edit={edit} value={form.email} onChange={(v: string) => setF("email", v)} display={contact.email || "—"} type="email" />
           {edit ? (
             <div>
@@ -453,7 +456,7 @@ function TabRede({ contact }: { contact: any }) {
                       )}
                     </div>
                     <div className="flex items-center gap-2 text-[11px] text-gray-400 mt-0.5">
-                      {c.phone && <span>{c.phone}</span>}
+                      {displayPhone(c.phone) && <span>{displayPhone(c.phone)}</span>}
                       {c.cidade && <span>· {c.cidade}{c.bairro ? ` / ${c.bairro}` : ""}</span>}
                       {c._count?.children > 0 && <span>· {c._count.children} na rede</span>}
                     </div>

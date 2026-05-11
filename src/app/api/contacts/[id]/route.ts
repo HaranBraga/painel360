@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { upperOrNull } from "@/lib/contact-normalize";
 
 export const dynamic = "force-dynamic";
 
@@ -50,17 +51,17 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   const contact = await prisma.contact.update({
     where: { id: params.id },
     data: {
-      ...(name  && { name }),
+      ...(name  && { name: String(name).trim().toUpperCase() }),
       ...(phone && { phone }),
       ...(email     !== undefined && { email }),
       ...(roleId    && { roleId }),
       ...(parentId  !== undefined && { parentId }),
       ...(notes     !== undefined && { notes }),
-      ...(genero    !== undefined && { genero }),
-      ...(rua       !== undefined && { rua }),
-      ...(bairro    !== undefined && { bairro }),
-      ...(cidade    !== undefined && { cidade }),
-      ...(zona      !== undefined && { zona }),
+      ...(genero    !== undefined && { genero: upperOrNull(genero) }),
+      ...(rua       !== undefined && { rua: upperOrNull(rua) }),
+      ...(bairro    !== undefined && { bairro: upperOrNull(bairro) }),
+      ...(cidade    !== undefined && { cidade: upperOrNull(cidade) }),
+      ...(zona      !== undefined && { zona: upperOrNull(zona) }),
       ...(dataNascimento !== undefined && {
         dataNascimento: dataNascimento ? new Date(dataNascimento) : null,
       }),
