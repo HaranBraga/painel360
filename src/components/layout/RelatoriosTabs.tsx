@@ -1,11 +1,12 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Table2 } from "lucide-react";
+import { LayoutDashboard, Table2, UsersRound } from "lucide-react";
 
 const tabs = [
-  { href: "/relatorios",        label: "Resumo",  icon: LayoutDashboard },
-  { href: "/relatorios/tabela", label: "Tabela",  icon: Table2 },
+  { href: "/relatorios",         label: "Resumo",   icon: LayoutDashboard },
+  { href: "/relatorios/tabela",  label: "Tabela",   icon: Table2 },
+  { href: "/relatorios/lideres", label: "Líderes",  icon: UsersRound },
 ];
 
 export function RelatoriosTabs() {

@@ -630,13 +630,22 @@ function ListView({ roles, onEdit, onAddUnder, onShowNetwork }: {
 function buildNetworkSizes(contacts: TreeContact[]) {
   const childrenMap = new Map<string, string[]>();
   for (const c of contacts) {
-    if (c.parentId) { if (!childrenMap.has(c.parentId)) childrenMap.set(c.parentId, []); childrenMap.get(c.parentId)!.push(c.id); }
+    // Guard contra auto-referência (contato com parentId apontando pra si).
+    if (c.parentId && c.parentId !== c.id) {
+      if (!childrenMap.has(c.parentId)) childrenMap.set(c.parentId, []);
+      childrenMap.get(c.parentId)!.push(c.id);
+    }
   }
   const sizes = new Map<string, number>();
+  const computing = new Set<string>();
   function getSize(id: string): number {
     if (sizes.has(id)) return sizes.get(id)!;
+    // Ciclo detectado (A→B→A): trata como folha pra não estourar a stack.
+    if (computing.has(id)) return 0;
+    computing.add(id);
     const ch = childrenMap.get(id) ?? [];
     const sz = ch.reduce((s, cid) => s + 1 + getSize(cid), 0);
+    computing.delete(id);
     sizes.set(id, sz); return sz;
   }
   for (const c of contacts) getSize(c.id);
@@ -669,15 +678,20 @@ const OrgCard = memo(function OrgCard({ contact, networkSize, onEdit, onDelete, 
   );
 });
 
-const OrgNode = memo(function OrgNode({ id, childrenMap, contactMap, sizes, defaultExpanded, onEdit, onDelete, onAdd }: {
+const OrgNode = memo(function OrgNode({ id, childrenMap, contactMap, sizes, defaultExpanded, onEdit, onDelete, onAdd, ancestors }: {
   id: string; childrenMap: Map<string, string[]>; contactMap: Map<string, TreeContact>;
   sizes: Map<string, number>; defaultExpanded: boolean;
   onEdit: (id: string) => void; onDelete: (id: string) => void; onAdd: (c: TreeContact) => void;
+  ancestors?: Set<string>;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const contact = contactMap.get(id);
   if (!contact) return null;
-  const children = childrenMap.get(id) ?? [];
+  // Evita render infinito quando há ciclo no parentId.
+  const safeAncestors = ancestors ?? new Set<string>();
+  if (safeAncestors.has(id)) return null;
+  const nextAncestors = new Set(safeAncestors); nextAncestors.add(id);
+  const children = (childrenMap.get(id) ?? []).filter(cid => !safeAncestors.has(cid));
   const networkSize = sizes.get(id) ?? 0;
 
   return (
@@ -701,7 +715,8 @@ const OrgNode = memo(function OrgNode({ id, childrenMap, contactMap, sizes, defa
                 {i < children.length - 1 && <div className="absolute top-0 right-0 w-1/2 bg-gray-200" style={{ height: 1 }} />}
                 <div className="w-px bg-gray-200" style={{ height: 28 }} />
                 <OrgNode id={childId} childrenMap={childrenMap} contactMap={contactMap} sizes={sizes}
-                  defaultExpanded={contact.role.level < 1} onEdit={onEdit} onDelete={onDelete} onAdd={onAdd} />
+                  defaultExpanded={contact.role.level < 1} onEdit={onEdit} onDelete={onDelete} onAdd={onAdd}
+                  ancestors={nextAncestors} />
               </div>
             ))}
           </div>
