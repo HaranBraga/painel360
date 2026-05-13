@@ -15,9 +15,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR">
       <body className={inter.className}>
-        <div className="flex h-screen overflow-hidden">
+        <div className="flex h-screen overflow-hidden print:block print:h-auto print:overflow-visible">
           <Sidebar />
-          <main className="flex-1 overflow-auto">{children}</main>
+          <main className="flex-1 overflow-auto print:overflow-visible">{children}</main>
         </div>
         <Toaster position="top-right" />
       </body>

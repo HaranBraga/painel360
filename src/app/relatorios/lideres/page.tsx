@@ -74,10 +74,10 @@ export default function RelatoriosLideresPage() {
                 <div className="report-cols">
                   {filtered.map((l, i) => (
                     <div key={l.id}
-                      className="report-row flex items-baseline gap-2 py-1 border-b border-dotted border-gray-200">
-                      <span className="text-[10px] text-gray-400 tabular-nums w-6 shrink-0">{i + 1}</span>
+                      className={`report-row flex items-baseline gap-2 px-2 py-1 ${i % 2 === 1 ? "bg-gray-100 print:bg-gray-200" : "bg-white"}`}>
+                      <span className="text-[10px] text-gray-500 tabular-nums w-6 shrink-0">{i + 1}</span>
                       <span className="flex-1 text-sm text-gray-900 truncate print:text-[11px]" title={l.name}>{l.name}</span>
-                      <span className="font-semibold text-gray-800 tabular-nums text-sm print:text-[11px]">
+                      <span className="font-semibold text-gray-900 tabular-nums text-sm print:text-[11px]">
                         {l.count.toLocaleString("pt-BR")}
                       </span>
                     </div>
@@ -109,6 +109,12 @@ export default function RelatoriosLideresPage() {
         @media print {
           @page { margin: 1cm; size: A4 landscape; }
           html, body { background: white !important; }
+          /* Mantém as cores de fundo (zebra) ao gerar o PDF */
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
           .report-cols {
             column-count: 3;
             column-gap: 1.2rem;

@@ -13,7 +13,7 @@ const nav = [
 export function Sidebar() {
   const path = usePathname();
   return (
-    <aside className="flex flex-col w-60 bg-white border-r border-gray-200 shrink-0">
+    <aside className="flex flex-col w-60 bg-white border-r border-gray-200 shrink-0 print:hidden">
       <div className="flex items-center gap-2 px-5 py-5 border-b border-gray-100">
         <div className="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center">
           <Grid3X3 size={16} className="text-white" />
