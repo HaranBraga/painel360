@@ -44,7 +44,7 @@ export default function RelatoriosLideresPage() {
         </div>
         <button onClick={() => window.print()}
           className="flex items-center gap-2 px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium">
-          <Printer size={14} /> Imprimir / PDF
+          <Printer size={14} /> Imprimir / PDF (A4 paisagem)
         </button>
         <span className="text-xs text-gray-400 ml-auto">
           {filtered.length.toLocaleString("pt-BR")} líder(es)
@@ -52,11 +52,15 @@ export default function RelatoriosLideresPage() {
       </div>
 
       <div className="flex-1 overflow-auto bg-gray-50 print:bg-white print:overflow-visible">
-        <div className="max-w-4xl mx-auto p-6 print:p-0 print:max-w-full">
-          <div className="bg-white border border-gray-200 rounded-xl print:border-0 print:rounded-none">
-            <div className="hidden print:block px-6 pt-6 pb-3 border-b border-gray-200">
-              <h1 className="text-xl font-bold text-gray-900">Líderes e quantidade de pessoas na rede</h1>
-              <p className="text-xs text-gray-500 mt-1">Gerado em {hoje} · {filtered.length} líder(es) · {totalRede.toLocaleString("pt-BR")} pessoas no total</p>
+        <div className="max-w-6xl mx-auto p-6 print:p-0 print:max-w-full">
+          <div className="bg-white border border-gray-200 rounded-xl p-6 print:border-0 print:rounded-none print:p-0">
+
+            {/* Cabeçalho — visível na tela só de leve; no print, é a capa */}
+            <div className="mb-4 print:mb-3 print:pb-2 print:border-b print:border-gray-300">
+              <h2 className="text-lg font-bold text-gray-900 print:text-base">Líderes e pessoas na rede</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Gerado em {hoje} · {filtered.length.toLocaleString("pt-BR")} líder(es) · {totalRede.toLocaleString("pt-BR")} pessoas no total
+              </p>
             </div>
 
             {loading ? (
@@ -64,40 +68,55 @@ export default function RelatoriosLideresPage() {
             ) : filtered.length === 0 ? (
               <div className="flex items-center justify-center py-20 text-gray-400 text-sm">Nenhum líder encontrado</div>
             ) : (
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200 print:bg-white">
-                  <tr>
-                    <th className="text-left text-[11px] font-semibold text-gray-600 uppercase px-4 py-2.5 w-12">#</th>
-                    <th className="text-left text-[11px] font-semibold text-gray-600 uppercase px-4 py-2.5">Nome</th>
-                    <th className="text-right text-[11px] font-semibold text-gray-600 uppercase px-4 py-2.5 w-32">Pessoas na rede</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <>
+                {/* Lista em colunas: 2 na tela, 3 no print A4 paisagem.
+                    column-rule mostra divisória vertical entre as colunas. */}
+                <div className="report-cols">
                   {filtered.map((l, i) => (
-                    <tr key={l.id} className="border-b border-gray-100 last:border-0 print:break-inside-avoid">
-                      <td className="px-4 py-2 text-gray-400 text-xs">{i + 1}</td>
-                      <td className="px-4 py-2 text-gray-900">{l.name}</td>
-                      <td className="px-4 py-2 text-right font-semibold text-gray-800 tabular-nums">{l.count.toLocaleString("pt-BR")}</td>
-                    </tr>
+                    <div key={l.id}
+                      className="report-row flex items-baseline gap-2 py-1 border-b border-dotted border-gray-200">
+                      <span className="text-[10px] text-gray-400 tabular-nums w-6 shrink-0">{i + 1}</span>
+                      <span className="flex-1 text-sm text-gray-900 truncate print:text-[11px]" title={l.name}>{l.name}</span>
+                      <span className="font-semibold text-gray-800 tabular-nums text-sm print:text-[11px]">
+                        {l.count.toLocaleString("pt-BR")}
+                      </span>
+                    </div>
                   ))}
-                </tbody>
-                <tfoot className="bg-gray-50 border-t-2 border-gray-300 print:bg-white">
-                  <tr>
-                    <td className="px-4 py-2" />
-                    <td className="px-4 py-2 text-xs font-semibold text-gray-700 uppercase">Total</td>
-                    <td className="px-4 py-2 text-right font-bold text-gray-900 tabular-nums">{totalRede.toLocaleString("pt-BR")}</td>
-                  </tr>
-                </tfoot>
-              </table>
+                </div>
+
+                <div className="mt-4 pt-3 border-t-2 border-gray-300 flex items-baseline justify-between print:mt-3">
+                  <span className="text-xs font-semibold text-gray-700 uppercase">Total geral</span>
+                  <span className="font-bold text-gray-900 tabular-nums text-base print:text-sm">
+                    {totalRede.toLocaleString("pt-BR")} pessoas
+                  </span>
+                </div>
+              </>
             )}
           </div>
         </div>
       </div>
 
       <style jsx global>{`
+        .report-cols {
+          column-count: 2;
+          column-gap: 2rem;
+          column-rule: 1px solid #e5e7eb;
+        }
+        .report-row {
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
         @media print {
-          @page { margin: 1.2cm; size: A4; }
-          body { background: white !important; }
+          @page { margin: 1cm; size: A4 landscape; }
+          html, body { background: white !important; }
+          .report-cols {
+            column-count: 3;
+            column-gap: 1.2rem;
+          }
+          .report-row {
+            padding-top: 1px;
+            padding-bottom: 1px;
+          }
         }
       `}</style>
     </div>
