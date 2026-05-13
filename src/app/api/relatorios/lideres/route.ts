@@ -4,53 +4,47 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// Relatório: cada líder (qualquer papel exceto APOIADOR) com a quantidade
-// total de pessoas na sua rede (descendentes recursivos).
+// Relatório: cada não-apoiador (Coordenador de Grupo, Coordenador, Líder) com
+// a quantidade de APOIADORES DIRETOS (filhos imediatos com papel APOIADOR).
+// Agrupado por papel pra evitar dupla contagem na soma geral.
 export async function GET() {
   const contacts = await prisma.contact.findMany({
+    where: { role: { key: { not: "APOIADOR" } } },
     select: {
       id: true,
       name: true,
-      parentId: true,
-      role: { select: { key: true, label: true } },
+      role: { select: { key: true, label: true, level: true } },
+      _count: {
+        select: {
+          children: { where: { role: { key: "APOIADOR" } } },
+        },
+      },
     },
-    orderBy: { name: "asc" },
+    orderBy: [{ role: { level: "asc" } }, { name: "asc" }],
   });
 
-  // childrenMap: id pai → ids dos filhos diretos. Ignora auto-referência.
-  const childrenMap = new Map<string, string[]>();
-  for (const c of contacts) {
-    if (c.parentId && c.parentId !== c.id) {
-      if (!childrenMap.has(c.parentId)) childrenMap.set(c.parentId, []);
-      childrenMap.get(c.parentId)!.push(c.id);
-    }
-  }
+  const all = contacts.map(c => ({
+    id: c.id,
+    name: c.name,
+    roleKey: c.role.key,
+    roleLabel: c.role.label,
+    count: c._count.children,
+  }));
 
-  // Conta recursiva com guard de ciclo (caso o banco tenha algum loop).
-  const sizes = new Map<string, number>();
-  const computing = new Set<string>();
-  function getSize(id: string): number {
-    if (sizes.has(id)) return sizes.get(id)!;
-    if (computing.has(id)) return 0;
-    computing.add(id);
-    const ch = childrenMap.get(id) ?? [];
-    let sz = 0;
-    for (const cid of ch) sz += 1 + getSize(cid);
-    computing.delete(id);
-    sizes.set(id, sz);
-    return sz;
-  }
-  for (const c of contacts) getSize(c.id);
+  const sectionsOrder: { key: string; label: string }[] = [
+    { key: "COORDENADOR_GRUPO", label: "Coordenadores de Grupo" },
+    { key: "COORDENADOR",       label: "Coordenadores" },
+    { key: "LIDER",             label: "Líderes" },
+  ];
 
-  const lideres = contacts
-    .filter(c => c.role.key !== "APOIADOR")
-    .map(c => ({
-      id: c.id,
-      name: c.name,
-      roleLabel: c.role.label,
-      count: sizes.get(c.id) ?? 0,
-    }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "pt-BR"));
+  const sections = sectionsOrder.map(s => {
+    const items = all
+      .filter(c => c.roleKey === s.key)
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "pt-BR"));
+    return { ...s, items };
+  });
 
-  return NextResponse.json({ lideres, total: lideres.length });
+  const totalApoiadores = all.reduce((sum, c) => sum + c.count, 0);
+
+  return NextResponse.json({ sections, totalApoiadores });
 }
