@@ -5,9 +5,9 @@ import { RelatoriosTabs } from "@/components/layout/RelatoriosTabs";
 
 type Lider = { id: string; name: string; roleLabel: string; count: number };
 
-// Qtd de linhas por folha A4 paisagem com 3 colunas e fonte ~11px.
+// Qtd de linhas por folha A4 retrato (em pé) com 2 colunas e fonte ~11px.
 // Calculado pra caber com folga mesmo na primeira página (que tem cabeçalho).
-const ITEMS_PER_PAGE = 120;
+const ITEMS_PER_PAGE = 100;
 
 export default function RelatoriosLideresPage() {
   const [lideres, setLideres] = useState<Lider[]>([]);
@@ -58,7 +58,7 @@ export default function RelatoriosLideresPage() {
         </div>
         <button onClick={() => window.print()}
           className="flex items-center gap-2 px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium">
-          <Printer size={14} /> Imprimir / PDF (A4 paisagem)
+          <Printer size={14} /> Imprimir / PDF (A4 retrato)
         </button>
         <span className="text-xs text-gray-400 ml-auto">
           {filtered.length.toLocaleString("pt-BR")} líder(es)
@@ -134,7 +134,7 @@ export default function RelatoriosLideresPage() {
           page-break-inside: avoid;
         }
         @media print {
-          @page { margin: 1cm; size: A4 landscape; }
+          @page { margin: 1cm; size: A4 portrait; }
           html, body { background: white !important; }
           /* Mantém as cores de fundo (zebra) ao gerar o PDF */
           * {
@@ -143,8 +143,8 @@ export default function RelatoriosLideresPage() {
             color-adjust: exact !important;
           }
           .report-cols {
-            column-count: 3;
-            column-gap: 1.2rem;
+            column-count: 2;
+            column-gap: 1.5rem;
           }
           .report-row {
             padding-top: 1px;
