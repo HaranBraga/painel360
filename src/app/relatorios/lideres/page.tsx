@@ -5,6 +5,10 @@ import { RelatoriosTabs } from "@/components/layout/RelatoriosTabs";
 
 type Lider = { id: string; name: string; roleLabel: string; count: number };
 
+// Qtd de linhas por folha A4 paisagem com 3 colunas e fonte ~11px.
+// Calculado pra caber com folga mesmo na primeira página (que tem cabeçalho).
+const ITEMS_PER_PAGE = 120;
+
 export default function RelatoriosLideresPage() {
   const [lideres, setLideres] = useState<Lider[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +25,16 @@ export default function RelatoriosLideresPage() {
     const q = search.toLowerCase();
     return lideres.filter(l => l.name.toLowerCase().includes(q));
   }, [lideres, search]);
+
+  // Divide em "folhas" pra controlar a paginação no PDF.
+  const pages = useMemo(() => {
+    if (filtered.length === 0) return [[]] as Lider[][];
+    const out: Lider[][] = [];
+    for (let i = 0; i < filtered.length; i += ITEMS_PER_PAGE) {
+      out.push(filtered.slice(i, i + ITEMS_PER_PAGE));
+    }
+    return out;
+  }, [filtered]);
 
   const totalRede = filtered.reduce((s, l) => s + l.count, 0);
   const hoje = new Date().toLocaleDateString("pt-BR");
@@ -53,46 +67,59 @@ export default function RelatoriosLideresPage() {
 
       <div className="flex-1 overflow-auto bg-gray-50 print:bg-white print:overflow-visible">
         <div className="max-w-6xl mx-auto p-6 print:p-0 print:max-w-full">
-          <div className="bg-white border border-gray-200 rounded-xl p-6 print:border-0 print:rounded-none print:p-0">
+          {loading ? (
+            <div className="flex items-center justify-center py-20 text-gray-400 text-sm">Carregando...</div>
+          ) : filtered.length === 0 ? (
+            <div className="bg-white border border-gray-200 rounded-xl p-6 flex items-center justify-center py-20 text-gray-400 text-sm">Nenhum líder encontrado</div>
+          ) : (
+            pages.map((pageItems, pageIdx) => {
+              const isLastPage = pageIdx === pages.length - 1;
+              return (
+                <div key={pageIdx}
+                  className={`report-page bg-white border border-gray-200 rounded-xl p-6 mb-6 print:border-0 print:rounded-none print:p-0 print:mb-0 ${isLastPage ? "" : "print:break-after-page"}`}>
 
-            {/* Cabeçalho — visível na tela só de leve; no print, é a capa */}
-            <div className="mb-4 print:mb-3 print:pb-2 print:border-b print:border-gray-300">
-              <h2 className="text-lg font-bold text-gray-900 print:text-base">Líderes e pessoas na rede</h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Gerado em {hoje} · {filtered.length.toLocaleString("pt-BR")} líder(es) · {totalRede.toLocaleString("pt-BR")} pessoas no total
-              </p>
-            </div>
-
-            {loading ? (
-              <div className="flex items-center justify-center py-20 text-gray-400 text-sm">Carregando...</div>
-            ) : filtered.length === 0 ? (
-              <div className="flex items-center justify-center py-20 text-gray-400 text-sm">Nenhum líder encontrado</div>
-            ) : (
-              <>
-                {/* Lista em colunas: 2 na tela, 3 no print A4 paisagem.
-                    column-rule mostra divisória vertical entre as colunas. */}
-                <div className="report-cols">
-                  {filtered.map((l, i) => (
-                    <div key={l.id}
-                      className={`report-row flex items-baseline gap-2 px-2 py-1 ${i % 2 === 1 ? "bg-gray-100 print:bg-gray-200" : "bg-white"}`}>
-                      <span className="text-[10px] text-gray-500 tabular-nums w-6 shrink-0">{i + 1}</span>
-                      <span className="flex-1 text-sm text-gray-900 truncate print:text-[11px]" title={l.name}>{l.name}</span>
-                      <span className="font-semibold text-gray-900 tabular-nums text-sm print:text-[11px]">
-                        {l.count.toLocaleString("pt-BR")}
-                      </span>
+                  {pageIdx === 0 && (
+                    <div className="mb-4 print:mb-3 print:pb-2 print:border-b print:border-gray-300">
+                      <h2 className="text-lg font-bold text-gray-900 print:text-base">Líderes e pessoas na rede</h2>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Gerado em {hoje} · {filtered.length.toLocaleString("pt-BR")} líder(es) · {totalRede.toLocaleString("pt-BR")} pessoas no total
+                      </p>
                     </div>
-                  ))}
-                </div>
+                  )}
 
-                <div className="mt-4 pt-3 border-t-2 border-gray-300 flex items-baseline justify-between print:mt-3">
-                  <span className="text-xs font-semibold text-gray-700 uppercase">Total geral</span>
-                  <span className="font-bold text-gray-900 tabular-nums text-base print:text-sm">
-                    {totalRede.toLocaleString("pt-BR")} pessoas
-                  </span>
+                  <div className="report-cols">
+                    {pageItems.map((l, i) => {
+                      const globalIdx = pageIdx * ITEMS_PER_PAGE + i;
+                      return (
+                        <div key={l.id}
+                          className={`report-row flex items-baseline gap-2 px-2 py-1 ${globalIdx % 2 === 1 ? "bg-gray-100 print:bg-gray-200" : "bg-white"}`}>
+                          <span className="text-[10px] text-gray-500 tabular-nums w-7 shrink-0">{globalIdx + 1}</span>
+                          <span className="flex-1 text-sm text-gray-900 truncate print:text-[11px]" title={l.name}>{l.name}</span>
+                          <span className="font-semibold text-gray-900 tabular-nums text-sm print:text-[11px]">
+                            {l.count.toLocaleString("pt-BR")}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Rodapé com numeração e total (total só na última folha) */}
+                  <div className="mt-4 pt-3 border-t-2 border-gray-300 flex items-baseline justify-between print:mt-3 print:text-[10px]">
+                    <span className="text-[11px] text-gray-500">
+                      Página {pageIdx + 1} de {pages.length}
+                    </span>
+                    {isLastPage ? (
+                      <span className="font-bold text-gray-900 tabular-nums text-base print:text-sm">
+                        Total geral: {totalRede.toLocaleString("pt-BR")} pessoas
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-gray-400">continua...</span>
+                    )}
+                  </div>
                 </div>
-              </>
-            )}
-          </div>
+              );
+            })
+          )}
         </div>
       </div>
 
@@ -122,6 +149,14 @@ export default function RelatoriosLideresPage() {
           .report-row {
             padding-top: 1px;
             padding-bottom: 1px;
+          }
+          /* Quebra de folha entre páginas — força cada bloco numa folha A4 */
+          .print\\:break-after-page {
+            break-after: page;
+            page-break-after: always;
+          }
+          .report-page {
+            break-inside: avoid-page;
           }
         }
       `}</style>
