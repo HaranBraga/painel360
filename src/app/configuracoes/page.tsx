@@ -144,13 +144,16 @@ function CampoForm({ initial, onCancel, onSaved }: any) {
 
   useEffect(() => {
     if (initial?.id) return;
-    const k = label.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+    let k = label.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
       .replace(/[^a-z0-9_\s]/g, "").trim().replace(/\s+/g, "_").slice(0, 30);
+    // Garante que a chave comece com letra (server exige `^[a-z]...`).
+    if (k && !/^[a-z]/.test(k)) k = "f_" + k.slice(0, 28);
     setKey(k);
   }, [label, initial?.id]);
 
   async function save() {
-    if (!label.trim() || !key.trim()) { toast.error("Label e key obrigatórios"); return; }
+    if (!label.trim()) { toast.error("Informe o rótulo do campo"); return; }
+    if (!key.trim())   { toast.error("Chave inválida — comece com uma letra"); return; }
     if (type === "select" && options.length === 0) { toast.error("Adicione pelo menos uma opção"); return; }
     setSaving(true);
     try {
@@ -160,10 +163,23 @@ function CampoForm({ initial, onCancel, onSaved }: any) {
         method, headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key, label, type, options, required }),
       });
-      if (!r.ok) { const d = await r.json(); toast.error(d.error ?? "Erro"); return; }
+      if (!r.ok) {
+        // Tenta extrair JSON; se não vier, mostra status e texto cru.
+        let msg = `Erro ${r.status}`;
+        try { const d = await r.json(); if (d?.error) msg = d.error; }
+        catch { try { const t = await r.text(); if (t) msg += ` — ${t.slice(0, 120)}`; } catch {} }
+        toast.error(msg);
+        console.error("[custom-fields] save falhou:", r.status, msg);
+        return;
+      }
       toast.success(initial?.id ? "Atualizado" : "Criado");
       onSaved();
-    } finally { setSaving(false); }
+    } catch (e: any) {
+      console.error("[custom-fields] erro de rede:", e);
+      toast.error("Falha de rede ao salvar — verifique sua conexão");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
