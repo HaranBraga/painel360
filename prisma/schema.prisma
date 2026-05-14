@@ -101,6 +101,7 @@ model Contact {
   @@index([zona])
   @@index([roleId])
   @@index([source])
+  @@index([parentId])
 }
 
 model KanbanStatus {

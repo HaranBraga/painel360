@@ -39,17 +39,22 @@ export default function RelatoriosLideresPage() {
       .catch(() => setFilterOpts({ standard: [], custom: [] }));
   }, []);
 
-  // Refaz a query toda vez que filtros mudam
+  // Refaz a query toda vez que filtros mudam — com debounce de 200ms pra
+  // não disparar uma chamada a cada toggle de checkbox.
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams();
     for (const [k, vals] of Object.entries(filters)) {
       for (const v of vals) params.append(k, v);
     }
-    fetch(`/api/relatorios/lideres${params.toString() ? `?${params.toString()}` : ""}`)
-      .then(r => r.json())
-      .then(d => { setSections(d.sections ?? []); setLoading(false); })
-      .catch(() => setLoading(false));
+    const controller = new AbortController();
+    const t = setTimeout(() => {
+      fetch(`/api/relatorios/lideres${params.toString() ? `?${params.toString()}` : ""}`, { signal: controller.signal })
+        .then(r => r.json())
+        .then(d => { setSections(d.sections ?? []); setLoading(false); })
+        .catch(err => { if (err?.name !== "AbortError") setLoading(false); });
+    }, 200);
+    return () => { clearTimeout(t); controller.abort(); };
   }, [filters]);
 
   const filteredSections = useMemo<Section[]>(() => {

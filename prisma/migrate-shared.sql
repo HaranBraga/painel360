@@ -121,3 +121,7 @@ DROP TABLE IF EXISTS "GroupMember"    CASCADE;
 DROP TABLE IF EXISTS "ContactGroup"   CASCADE;
 DROP TYPE  IF EXISTS "DispatchStatus" CASCADE;
 
+-- Índice em parentId — usado pesado por relatórios e contagens de rede.
+-- groupBy de filhos por pai sem índice fazia seq scan em toda a tabela.
+CREATE INDEX IF NOT EXISTS "Contact_parentId_idx" ON "Contact"("parentId");
+

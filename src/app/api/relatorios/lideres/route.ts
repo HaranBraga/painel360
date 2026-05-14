@@ -5,7 +5,6 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const STD_FIELDS = ["cidade", "bairro", "zona", "genero"] as const;
-type StdField = (typeof STD_FIELDS)[number];
 
 /**
  * Relatório: cada não-apoiador com a quantidade de APOIADORES DIRETOS,
@@ -18,7 +17,9 @@ type StdField = (typeof STD_FIELDS)[number];
  *   - std_<campo>=<valor>     ex: std_cidade=São Paulo
  *   - cf_<chave>=<valor>      ex: cf_religiao=Católico
  *
- * Os parâmetros podem repetir (ex: std_cidade=SP&std_cidade=RJ → in [SP, RJ]).
+ * Performance: usa `groupBy` único nos apoiadores em vez de subquery por
+ * líder. Em bases com 1000+ líderes, isso transforma N+1 numa única query
+ * agregada.
  */
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
@@ -26,18 +27,14 @@ export async function GET(req: NextRequest) {
 
   const customFields = await prisma.contactCustomField.findMany();
 
-  // Constrói as cláusulas Prisma reutilizáveis para líder e apoiador.
   const buildClauses = (): any[] => {
     const and: any[] = [];
 
-    // Campos padrão: scalar `in`.
     for (const f of STD_FIELDS) {
       const vals = params.getAll(`std_${f}`).filter(v => v.trim() !== "");
       if (vals.length > 0) and.push({ [f]: { in: vals } });
     }
 
-    // Campos personalizados: filtro em JSON via `path` + `equals`.
-    // Múltiplos valores no mesmo campo → OR de equals (Prisma não tem `in` pra JSON).
     for (const cf of customFields) {
       const raw = params.getAll(`cf_${cf.key}`).filter(v => v.trim() !== "");
       if (raw.length === 0) continue;
@@ -68,27 +65,36 @@ export async function GET(req: NextRequest) {
     apoiadorWhere.AND = filterClauses;
   }
 
-  const contacts = await prisma.contact.findMany({
-    where: leaderWhere,
-    select: {
-      id: true,
-      name: true,
-      role: { select: { key: true, label: true, level: true } },
-      _count: {
-        select: {
-          children: { where: apoiadorWhere },
-        },
+  // 1 query pra listar líderes + 1 query pra contar apoiadores por parentId
+  // (em vez de N subqueries — uma por líder).
+  const [leaders, apoiadorGroups] = await Promise.all([
+    prisma.contact.findMany({
+      where: leaderWhere,
+      select: {
+        id: true,
+        name: true,
+        role: { select: { key: true, label: true, level: true } },
       },
-    },
-    orderBy: [{ role: { level: "asc" } }, { name: "asc" }],
-  });
+      orderBy: [{ role: { level: "asc" } }, { name: "asc" }],
+    }),
+    prisma.contact.groupBy({
+      by: ["parentId"],
+      where: { ...apoiadorWhere, parentId: { not: null } },
+      _count: true,
+    }),
+  ]);
 
-  const all = contacts.map(c => ({
+  const countByParent = new Map<string, number>();
+  for (const g of apoiadorGroups) {
+    if (g.parentId) countByParent.set(g.parentId, g._count);
+  }
+
+  const all = leaders.map(c => ({
     id: c.id,
     name: c.name,
     roleKey: c.role.key,
     roleLabel: c.role.label,
-    count: c._count.children,
+    count: countByParent.get(c.id) ?? 0,
   }));
 
   const sectionsOrder: { key: string; label: string }[] = [
