@@ -143,15 +143,47 @@ function TabGeral({ contact, customFields, roles, onSaved }: any) {
   async function save() {
     setSaving(true);
     try {
+      // Limpa o payload: phone volta com prefixo 55, strings vazias viram null
+      // (parentId="" é inválido como FK e quebra o update).
+      const rawDigits = String(form.phone ?? "").replace(/\D/g, "");
+      const payload = {
+        name: form.name,
+        // Só envia phone se o usuário tem dígitos válidos; senão deixa o backend manter o atual.
+        phone: rawDigits.length >= 10
+          ? (rawDigits.startsWith("55") ? rawDigits : `55${rawDigits}`)
+          : undefined,
+        email:    form.email    || null,
+        roleId:   form.roleId,
+        parentId: form.parentId || null,
+        cidade:   form.cidade   || null,
+        bairro:   form.bairro   || null,
+        zona:     form.zona     || null,
+        rua:      form.rua      || null,
+        genero:   form.genero   || null,
+        dataNascimento: form.dataNascimento || null,
+        customFields: form.customFields ?? {},
+      };
       const r = await fetch(`/api/contacts/${contact.id}`, {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, dataNascimento: form.dataNascimento || null }),
+        body: JSON.stringify(payload),
       });
-      if (!r.ok) { const d = await r.json(); toast.error(d.error ?? "Erro"); return; }
+      if (!r.ok) {
+        let msg = `Erro ${r.status}`;
+        try { const d = await r.json(); if (d?.error) msg = d.error; }
+        catch { try { const t = await r.text(); if (t) msg += ` — ${t.slice(0, 120)}`; } catch {} }
+        toast.error(msg);
+        console.error("[contact save]", r.status, msg);
+        return;
+      }
       toast.success("Contato atualizado");
       setEdit(false);
       onSaved();
-    } finally { setSaving(false); }
+    } catch (e: any) {
+      console.error("[contact save] erro de rede:", e);
+      toast.error("Falha de rede ao salvar");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
